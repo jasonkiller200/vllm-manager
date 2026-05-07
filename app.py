@@ -155,10 +155,13 @@ def api_enable_model():
     return jsonify(manager.set_enabled_model(path))
 
 
-@app.route("/api/models", methods=["DELETE"])
+@app.route("/api/models/remove", methods=["POST"])
 def api_remove_model():
     from flask import request
-    path = request.args.get("path", "")
+    data = request.get_json(silent=True) or {}
+    path = data.get("path")
+    if not path:
+        return jsonify({"status": "error", "message": "缺少 model path"}), 400
     return jsonify(manager.remove_model(path))
 
 
