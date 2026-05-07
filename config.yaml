@@ -6,7 +6,7 @@ defaults:
   gpu_memory_utilization: 0.95
   host: 0.0.0.0
   kv_cache_dtype: fp8
-  max_model_len: 2048
+  max_model_len: 96000
   max_num_seqs: 4
   port: 8001
   tool_call_parser: qwen3_xml

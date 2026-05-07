@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadConfig();
     refreshAll();
     // 每 5 秒自動刷新狀態
-    refreshTimer = setInterval(refreshStatus, 5000);
+    refreshTimer = setInterval(refreshAll, 5000);
 });
 
 async function loadConfig() {
