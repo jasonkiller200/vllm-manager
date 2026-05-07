@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>vLLM Manager</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>vLLM Manager</h1>
+            <p class="subtitle">輕量級 vLLM 服務管理面板</p>
+        </header>
+
+        <!-- 狀態列 -->
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="label">狀態</span>
+                <span id="status-badge" class="badge badge-stopped">停止</span>
+            </div>
+            <div class="status-item">
+                <span class="label">PID</span>
+                <span id="status-pid">-</span>
+            </div>
+            <div class="status-item">
+                <span class="label">運行時間</span>
+                <span id="status-uptime">-</span>
+            </div>
+            <div class="status-item">
+                <span class="label">GPU 顯存</span>
+                <span id="status-gpu">-- / -- GB</span>
+            </div>
+            <div class="status-item">
+                <span class="label">GPU 溫度</span>
+                <span id="status-temp">--°C</span>
+            </div>
+        </div>
+
+        <!-- 控制列 -->
+        <div class="controls">
+            <button id="btn-start" class="btn btn-green" onclick="startVLLM()">啟動</button>
+            <button id="btn-stop" class="btn btn-red" onclick="stopVLLM()" disabled>停止</button>
+            <button id="btn-restart" class="btn btn-orange" onclick="restartVLLM()" disabled>重啟</button>
+            <button class="btn btn-blue" onclick="refreshAll()">重新整理</button>
+        </div>
+
+        <!-- 主面板 -->
+        <div class="panels">
+            <!-- 左：模型 -->
+            <div class="panel">
+                <h2>模型清單
+                    <button class="btn btn-sm btn-blue float-right" onclick="scanModels()">掃描目錄</button>
+                    <span class="badge badge-running float-right" style="margin-right: 8px;">/home/jason/models/</span>
+                </h2>
+                <div id="model-list"></div>
+
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+                    <h3 style="font-size: 0.9em; margin-bottom: 8px;">📥 從 Hugging Face 複製模型</h3>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="hf-repo" class="input" placeholder="如: Qwen/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit">
+                        <button class="btn btn-blue" onclick="cloneModel()">Clone</button>
+                    </div>
+                    <div id="clone-progress-container" style="margin-top: 8px; display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <span id="clone-status-text" style="font-size: 0.85em; color: var(--muted);"></span>
+                            <span id="clone-percentage" style="font-size: 0.85em; font-weight: bold; color: var(--blue);">0%</span>
+                        </div>
+                        <div style="width: 100%; height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden;">
+                            <div id="clone-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--blue), #4ade80); border-radius: 4px; transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+                    <h3 style="font-size: 0.9em; margin-bottom: 8px;">➕ 手動新增模型</h3>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="new-model-name" placeholder="模型名稱">
+                        <input type="text" id="new-model-path" placeholder="模型路徑">
+                        <button class="btn btn-blue" onclick="addModel()">新增</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右：參數 -->
+            <div class="panel">
+                <h2>vLLM 參數</h2>
+                <form id="params-form" onsubmit="saveParams(event)">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Port</label>
+                            <input type="number" id="param-port" value="8001">
+                        </div>
+                        <div class="form-group">
+                            <label>Host</label>
+                            <input type="text" id="param-host" value="0.0.0.0">
+                        </div>
+                        <div class="form-group">
+                            <label>Dtype</label>
+                            <select id="param-dtype">
+                                <option value="float16" selected>float16</option>
+                                <option value="bfloat16">bfloat16</option>
+                                <option value="float32">float32</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Max Model Len</label>
+                            <input type="number" id="param-max-model-len" value="128000">
+                        </div>
+                        <div class="form-group">
+                            <label>GPU Memory %</label>
+                            <input type="number" id="param-gpu-memory-utilization" value="0.9" step="0.05" min="0.1" max="1.0">
+                        </div>
+                        <div class="form-group">
+                            <label>Max Num Seqs</label>
+                            <input type="number" id="param-max-num-seqs" value="4">
+                        </div>
+                        <div class="form-group">
+                            <label>KV Cache Dtype</label>
+                            <select id="param-kv-cache-dtype">
+                                <option value="fp8" selected>fp8</option>
+                                <option value="auto">auto</option>
+                                <option value="auto">fp8</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Tool Call Parser</label>
+                            <input type="text" id="param-tool-call-parser" value="qwen3_xml">
+                        </div>
+                    </div>
+                    <div class="form-checkboxes">
+                        <label><input type="checkbox" id="param-enable-prefix-caching" checked> Prefix Caching</label>
+                        <label><input type="checkbox" id="param-enable-auto-tool-choice" checked> Auto Tool Choice</label>
+                        <label><input type="checkbox" id="param-trust-remote-code" checked> Trust Remote Code</label>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-green">儲存參數</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- GPU 狀態 -->
+        <div class="panel">
+            <h2>GPU 狀態</h2>
+            <div id="gpu-info" class="gpu-info">載入中...</div>
+        </div>
+
+        <!-- 日誌 -->
+        <div class="panel">
+            <h2>vLLM 即時日誌
+                <span id="log-status" class="badge badge-stopped" style="font-size:0.75em">串流關閉</span>
+                <button class="btn btn-sm btn-blue float-right" onclick="toggleLogStream()">開始串流</button>
+                <select id="log-lines" onchange="refreshLogs()" class="float-right" style="margin-right: 8px;">
+                    <option value="50">50 行</option>
+                    <option value="100" selected>100 行</option>
+                    <option value="200">200 行</option>
+                    <option value="500">500 行</option>
+                </select>
+            </h2>
+            <div id="log-output" class="log-output">點擊「開始串流」來即時查看 vLLM 日誌...</div>
+        </div>
+
+        <footer>
+            <span>vLLM Manager v0.1</span>
+            <span id="last-updated"></span>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,19 @@
+defaults:
+  disable_log_requests: true
+  dtype: float16
+  enable_auto_tool_choice: true
+  enable_prefix_caching: true
+  gpu_memory_utilization: 0.85
+  host: 0.0.0.0
+  kv_cache_dtype: fp8
+  max_model_len: 8192
+  max_num_seqs: 4
+  port: 8001
+  tool_call_parser: qwen3_xml
+  trust_remote_code: true
+  uvicorn_log_level: info
+log_dir: /home/jason/app/vllm/logs
+log_max_lines: 2000
+models: []
+models_dir: /home/jason/models
+venv_path: /home/jason/vllm/venv

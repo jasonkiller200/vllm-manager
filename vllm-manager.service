@@ -1,0 +1,16 @@
+[Unit]
+Description=vLLM Manager Web Panel
+After=network.target
+
+[Service]
+Type=simple
+User=jason
+WorkingDirectory=/home/jason/app/vllm
+ExecStart=/home/jason/app/vllm/venv/bin/python -m flask --app app.py run --host=0.0.0.0 --port=5555
+Restart=on-failure
+RestartSec=5
+Environment=PATH=/home/jason/app/vllm/venv/bin:/usr/bin:/bin
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
