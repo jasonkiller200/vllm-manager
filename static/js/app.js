@@ -46,14 +46,15 @@ async function loadConfig() {
 // ---- 刷新 ----
 
 async function refreshAll() {
-    refreshStatus();
-    refreshModels();
+    const s = await fetchJSON(API.status);
+    const running = s?.running || false;
+    renderStatus(s);
+    refreshModels(running);
     refreshGPU();
     refreshLogs();
 }
 
-async function refreshStatus() {
-    const s = await fetchJSON(API.status);
+function renderStatus(s) {
     if (!s) return;
 
     const badge = document.getElementById('status-badge');
@@ -72,35 +73,43 @@ async function refreshStatus() {
         uptimeEl.textContent = '-';
     }
 
-    // 按鈕狀態
-    document.getElementById('btn-start').disabled = s.running;
-    document.getElementById('btn-stop').disabled = !s.running;
-    document.getElementById('btn-restart').disabled = !s.running;
-
     document.getElementById('last-updated').textContent =
         '最後更新: ' + new Date().toLocaleTimeString('zh-TW');
 }
 
-async function refreshModels() {
+async function refreshModels(running) {
     const models = await fetchJSON(API.models);
+    renderModels(models, running);
+}
+
+function renderModels(models, running) {
     const container = document.getElementById('model-list');
     if (!models || models.length === 0) {
         container.innerHTML = '<p style="color:#8b949e">尚無模型</p>';
         return;
     }
 
-    container.innerHTML = models.map(m => `
+    container.innerHTML = models.map(m => {
+        let btn = '';
+        if (m.enabled && running) {
+            btn = `<button class="btn btn-sm btn-red" onclick="stopVLLM()">停止</button>`;
+        } else if (m.enabled) {
+            btn = `<button class="btn btn-sm btn-green" onclick="startModel('${esc(m.path)}')">啟動</button>`;
+        } else {
+            btn = `<button class="btn btn-sm btn-blue" onclick="enableModel('${esc(m.path)}')">啟用</button>`;
+        }
+        return `
         <div class="model-item">
             <div class="model-info">
                 <div class="model-name">${esc(m.name)} ${m.enabled ? '<span class="badge badge-running" style="font-size:0.7em">啟用</span>' : ''}</div>
                 <div class="model-path">${esc(m.path)}</div>
             </div>
             <div class="model-actions">
-                ${!m.enabled ? `<button class="btn btn-sm btn-blue" onclick="enableModel('${esc(m.path)}')">啟用</button>` : ''}
+                ${btn}
                 <button class="btn btn-sm btn-red" onclick="removeModel('${esc(m.path)}')">移除</button>
             </div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 async function refreshGPU() {
@@ -191,7 +200,15 @@ async function refreshLogs() {
 // ---- 控制 ----
 
 async function startVLLM() {
-    const resp = await fetchJSON(API.start, { method: 'POST' });
+    const resp = await fetchJSON(API.start, { method: 'POST', body: JSON.stringify({}) });
+    if (resp) {
+        alert(`vLLM ${resp.status}: ${resp.message || '啟動成功'}`);
+        refreshAll();
+    }
+}
+
+async function startModel(path) {
+    const resp = await fetchJSON(API.start, { method: 'POST', body: JSON.stringify({ model_path: path }) });
     if (resp) {
         alert(`vLLM ${resp.status}: ${resp.message || '啟動成功'}`);
         refreshAll();
@@ -199,7 +216,7 @@ async function startVLLM() {
 }
 
 async function stopVLLM() {
-    const resp = await fetchJSON(API.stop, { method: 'POST' });
+    const resp = await fetchJSON(API.stop, { method: 'POST', body: JSON.stringify({}) });
     if (resp) {
         alert(`vLLM ${resp.status}`);
         refreshAll();
@@ -207,7 +224,7 @@ async function stopVLLM() {
 }
 
 async function restartVLLM() {
-    const resp = await fetchJSON(API.restart, { method: 'POST' });
+    const resp = await fetchJSON(API.restart, { method: 'POST', body: JSON.stringify({}) });
     if (resp) {
         alert(`vLLM ${resp.status}: ${resp.message || '重啟成功'}`);
         refreshAll();
@@ -234,8 +251,11 @@ async function addModel(e) {
 }
 
 async function enableModel(path) {
-    await fetchJSON(`${API.models}/enable/${encodeURIComponent(path)}`, { method: 'POST' });
-    refreshModels();
+    const resp = await fetchJSON(`${API.models}/enable`, {
+        method: 'POST',
+        body: JSON.stringify({ path })
+    });
+    if (resp) refreshModels((await fetchJSON(API.status))?.running || false);
 }
 
 async function removeModel(path) {

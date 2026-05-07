@@ -50,7 +50,7 @@ def api_status():
 
 @app.route("/api/start", methods=["POST"])
 def api_start():
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
     result = manager.start(
         model_path=data.get("model_path"),
         params=data.get("params")
@@ -65,7 +65,7 @@ def api_stop():
 
 @app.route("/api/restart", methods=["POST"])
 def api_restart():
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
     result = manager.restart(
         model_path=data.get("model_path"),
         params=data.get("params")
@@ -82,7 +82,7 @@ def api_get_config():
 
 @app.route("/api/config", methods=["POST"])
 def api_update_config():
-    result = manager.update_config(request.get_json() or {})
+    result = manager.update_config(request.get_json(silent=True) or {})
     return jsonify(result)
 
 
@@ -138,7 +138,7 @@ def api_clone_status():
 
 @app.route("/api/models", methods=["POST"])
 def api_add_model():
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
     result = manager.add_model(
         name=data.get("name", ""),
         path=data.get("path", "")
@@ -146,8 +146,12 @@ def api_add_model():
     return jsonify(result)
 
 
-@app.route("/api/models/enable/<path:path>", methods=["POST"])
-def api_enable_model(path):
+@app.route("/api/models/enable", methods=["POST"])
+def api_enable_model():
+    data = request.get_json(silent=True) or {}
+    path = data.get("path")
+    if not path:
+        return jsonify({"status": "error", "message": "缺少 model path"}), 400
     return jsonify(manager.set_enabled_model(path))
 
 
