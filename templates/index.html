@@ -167,12 +167,14 @@
                                         📊 MTP 調參參考 <span id="mtp-tuning-arrow">▼</span>
                                     </div>
                                     <div id="mtp-tuning-content" style="display: none; font-size: 0.75em; color: #c9d1d9; margin-top: 4px; line-height: 1.6; background: #0d1117; padding: 8px; border-radius: 4px; border: 1px solid #21262d;">
-                                        <strong>✅ 最佳化參數參考 (num_speculative_tokens=1)：</strong><br>
-                                        • Generation Throughput：最高達到 <strong>122.8 tokens/s</strong>（非常不錯）<br>
-                                        • Acceptance Rate：最高 <strong>93.4%</strong>，多數在 84%~93% 之間（對 num=1 來說算優秀）<br>
-                                        • Mean Acceptance Length：最高接近 <strong>1.93</strong>（接近理想值 2.0）<br>
-                                        <br>
-                                        整體來說，這組參數已經調得相當不錯，MTP 有發揮明顯加速效果。
+                                        <strong>📊 MTP 三個關鍵指標說明：</strong><br><br>
+                                        <strong>1. Generation Throughput (tokens/s)</strong><br>
+                                        &nbsp;&nbsp;每秒產生的 token 數量。用於比對開啟 MTP 前後的速度改善幅度 —— 數字越高代表輸出越快。<br><br>
+                                        <strong>2. Acceptance Rate (%)</strong><br>
+                                        &nbsp;&nbsp;MTP 預猜 token 被模型接受的比率。數值越高代表預猜越精準，MTP 加速效果越好。一般 80%~95% 算理想範圍。<br><br>
+                                        <strong>3. Mean Acceptance Length</strong><br>
+                                        &nbsp;&nbsp;每次 MTP 步驟平均接受的 token 數量。理論上限等於 <code>num_speculative_tokens</code> + 1。數值越接近上限代表預猜效率越高。<br><br>
+                                        調整參數時建議以這三個指標作為參考，觀測改善前後變化。
                                     </div>
                                 </div>
                             </div>
