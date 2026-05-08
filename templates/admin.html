@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>vLLM Manager - 系統管理</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            padding: 20px;
+        }
+        .container { max-width: 1100px; margin: 0 auto; }
+        header { text-align: center; padding: 20px 0 30px; }
+        header h1 { font-size: 1.8em; color: #58a6ff; margin-bottom: 8px; }
+        header .subtitle { color: #8b949e; font-size: 0.9em; }
+        .back-link {
+            display: inline-block;
+            color: #58a6ff;
+            text-decoration: none;
+            font-size: 0.85em;
+            margin-bottom: 16px;
+        }
+        .back-link:hover { text-decoration: underline; }
+        .panel {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .panel h2 {
+            font-size: 1.2em;
+            color: #58a6ff;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #21262d;
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.75em;
+            font-weight: 600;
+        }
+        .badge-admin { background: #1f2a3d; color: #58a6ff; }
+        .badge-operator { background: #0d4429; color: #3fb950; }
+        .badge-active { background: #0d4429; color: #3fb950; }
+        .badge-disabled { background: #44111a; color: #f85149; }
+        .badge-locked { background: #3d2e00; color: #d29922; }
+        .btn {
+            display: inline-block;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.8em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            text-decoration: none;
+        }
+        .btn-green { background: #238636; color: white; }
+        .btn-green:hover { background: #2ea043; }
+        .btn-red { background: #da3633; color: white; }
+        .btn-red:hover { background: #f85149; }
+        .btn-gray { background: #21262d; color: #c9d1d9; }
+        .btn-gray:hover { background: #30363d; }
+        .btn-yellow { background: #3d2e00; color: #d29922; border: 1px solid #6e4e00; }
+        .btn-yellow:hover { background: #4a3800; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+        th { text-align: left; color: #8b949e; padding: 8px 12px; border-bottom: 1px solid #21262d; font-weight: 600; font-size: 0.9em; }
+        td { padding: 8px 12px; border-bottom: 1px solid #21262d; vertical-align: middle; }
+        tr:last-child td { border-bottom: none; }
+        .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 420px;
+            width: 90%;
+        }
+        .modal h3 { color: #58a6ff; margin-bottom: 16px; }
+        .modal .form-group { margin-bottom: 16px; }
+        .modal label { display: block; font-size: 0.85em; color: #8b949e; margin-bottom: 6px; }
+        .modal input, .modal select {
+            width: 100%;
+            padding: 8px 12px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 0.9em;
+        }
+        .modal input:focus, .modal select:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+        .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+        .msg {
+            padding: 10px 14px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 0.85em;
+            display: none;
+        }
+        .msg.show { display: block; }
+        .msg-error { background: #44111a; color: #f85149; border-left: 3px solid #f85149; }
+        .msg-success { background: #0d4429; color: #3fb950; border-left: 3px solid #3fb950; }
+        .log-success { color: #3fb950; }
+        .log-fail { color: #f85149; }
+        .log-reason { color: #8b949e; font-size: 0.85em; }
+        .section-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .section-title h2 { margin-bottom: 0; border-bottom: none; padding-bottom: 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚙️ vLLM Manager - 系統管理</h1>
+            <div class="subtitle">當前登入：{{ current_user.username }} ({{ current_user.role }})</div>
+        </header>
+
+        <a href="/" class="back-link">← 返回主控台</a>
+
+        <div id="msg-error" class="msg msg-error"></div>
+        <div id="msg-success" class="msg msg-success"></div>
+
+        <!-- 使用者管理 -->
+        <div class="panel">
+            <div class="section-title">
+                <h2>使用者管理</h2>
+                <button class="btn btn-green" onclick="showAddUserModal()">＋ 新增使用者</button>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>帳號</th>
+                        <th>角色</th>
+                        <th>狀態</th>
+                        <th>失敗次數</th>
+                        <th>建立時間</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="users-tbody">
+                    <tr><td colspan="6" style="text-align:center;color:#8b949e;">載入中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 登入日誌 -->
+        <div class="panel">
+            <div class="section-title">
+                <h2>登入日誌</h2>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-gray" onclick="loadLogs()">🔄 重新整理</button>
+                    <button class="btn btn-red" onclick="clearLogs()">🗑️ 清除日誌</button>
+                </div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>時間</th>
+                        <th>帳號</th>
+                        <th>IP</th>
+                        <th>結果</th>
+                        <th>備註</th>
+                    </tr>
+                </thead>
+                <tbody id="logs-tbody">
+                    <tr><td colspan="5" style="text-align:center;color:#8b949e;">載入中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 新增使用者 Modal -->
+    <div class="modal-overlay" id="add-user-modal">
+        <div class="modal">
+            <h3>新增使用者</h3>
+            <div class="form-group">
+                <label>帳號</label>
+                <input type="text" id="new-username" placeholder="請輸入帳號">
+            </div>
+            <div class="form-group">
+                <label>密碼</label>
+                <input type="password" id="new-password" placeholder="請設定密碼">
+            </div>
+            <div class="form-group">
+                <label>角色</label>
+                <select id="new-role">
+                    <option value="operator">Operator (操作員)</option>
+                    <option value="admin">Admin (管理者)</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-gray" onclick="closeAddUserModal()">取消</button>
+                <button class="btn btn-green" onclick="addUser()">建立</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showMsg(type, text) {
+            const el = document.getElementById(type === 'error' ? 'msg-error' : 'msg-success');
+            el.textContent = text;
+            el.classList.add('show');
+            setTimeout(() => el.classList.remove('show'), 5000);
+        }
+
+        // ---- 使用者管理 ----
+
+        async function loadUsers() {
+            try {
+                const resp = await fetch('/api/auth/users');
+                const data = await resp.json();
+                const tbody = document.getElementById('users-tbody');
+                if (!Array.isArray(data) || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#8b949e;">沒有使用者</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.map(u => {
+                    let statusBadges = '';
+                    if (u.role === 'admin') statusBadges += '<span class="badge badge-admin">Admin</span>';
+                    else statusBadges += '<span class="badge badge-operator">Operator</span>';
+                    if (!u.is_active) statusBadges += ' <span class="badge badge-disabled">停用</span>';
+                    else if (u.locked_until && u.locked_until > Math.floor(Date.now()/1000)) statusBadges += ' <span class="badge badge-locked">已鎖定</span>';
+                    
+                    const canDelete = u.role !== 'admin';
+                    const canDisable = u.role !== 'admin';
+                    let actions = `<button class="btn btn-gray" onclick="changeRole(${u.id}, '${u.role === 'admin' ? 'operator' : 'admin'}')">切換角色</button>`;
+                    if (canDisable) actions += ` <button class="btn btn-gray" onclick="toggleActive(${u.id}, ${u.is_active ? 0 : 1})">${u.is_active ? '停用' : '啟用'}</button>`;
+                    if (u.locked_until && u.locked_until > Math.floor(Date.now()/1000)) actions += ` <button class="btn btn-yellow" onclick="unlockUser(${u.id})">解鎖</button>`;
+                    if (u.failed_attempts > 0) actions += ` <button class="btn btn-gray" onclick="resetAttempts(${u.id})">重置次數</button>`;
+                    if (canDelete) actions += ` <button class="btn btn-red" onclick="deleteUser(${u.id}, '${u.username}')">刪除</button>`;
+
+                    return `<tr>
+                        <td>${u.username}</td>
+                        <td>${statusBadges}</td>
+                        <td>${u.is_active ? '啟用' : '停用'}</td>
+                        <td>${u.failed_attempts}</td>
+                        <td>${u.created_at}</td>
+                        <td><div class="actions">${actions}</div></td>
+                    </tr>`;
+                }).join('');
+            } catch (e) {
+                showMsg('error', '載入使用者清單失敗: ' + e.message);
+            }
+        }
+
+        function showAddUserModal() {
+            document.getElementById('add-user-modal').classList.add('show');
+            document.getElementById('new-username').focus();
+        }
+
+        function closeAddUserModal() {
+            document.getElementById('add-user-modal').classList.remove('show');
+            document.getElementById('new-username').value = '';
+            document.getElementById('new-password').value = '';
+        }
+
+        async function addUser() {
+            const username = document.getElementById('new-username').value.trim();
+            const password = document.getElementById('new-password').value;
+            const role = document.getElementById('new-role').value;
+            if (!username || !password) { showMsg('error', '請填寫帳號和密碼'); return; }
+            try {
+                const resp = await fetch('/api/auth/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, role })
+                });
+                const data = await resp.json();
+                if (data.status === 'ok') {
+                    showMsg('success', data.message);
+                    closeAddUserModal();
+                    loadUsers();
+                } else {
+                    showMsg('error', data.message);
+                }
+            } catch (e) {
+                showMsg('error', '建立失敗: ' + e.message);
+            }
+        }
+
+        async function changeRole(userId, newRole) {
+            try {
+                const resp = await fetch(`/api/auth/users/${userId}/role`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ role: newRole })
+                });
+                const data = await resp.json();
+                if (data.status === 'ok') { showMsg('success', data.message); loadUsers(); }
+                else showMsg('error', data.message);
+            } catch (e) { showMsg('error', e.message); }
+        }
+
+        async function toggleActive(userId, isActive) {
+            try {
+                const resp = await fetch(`/api/auth/users/${userId}/toggle`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_active: isActive })
+                });
+                const data = await resp.json();
+                if (data.status === 'ok') { showMsg('success', data.message); loadUsers(); }
+                else showMsg('error', data.message);
+            } catch (e) { showMsg('error', e.message); }
+        }
+
+        async function unlockUser(userId) {
+            try {
+                const resp = await fetch(`/api/auth/users/${userId}/unlock`, {
+                    method: 'POST'
+                });
+                const data = await resp.json();
+                if (data.status === 'ok') { showMsg('success', data.message); loadUsers(); }
+                else showMsg('error', data.message);
+            } catch (e) { showMsg('error', e.message); }
+        }
+
+        async function resetAttempts(userId) {
+            try {
+                const resp = await fetch(`/api/auth/users/${userId}/reset-attempts`, {
+                    method: 'POST'
+                });
+                const data = await resp.json();
+                if (data.status === 'ok') { showMsg('success', data.message); loadUsers(); }
+                else showMsg('error', data.message);
+            } catch (e) { showMsg('error', e.message); }
+        }
+
+        async function deleteUser(userId, username) {
+            if (!confirm(`確定要刪除使用者 "${username}" 嗎？`)) return;
+            try {
+                const resp = await fetch(`/api/auth/users/${userId}`, {
+                    method: 'DELETE'
+                });
+                const data = await resp.json();
+                if (data.status === 'ok') { showMsg('success', data.message); loadUsers(); }
+                else showMsg('error', data.message);
+            } catch (e) { showMsg('error', e.message); }
+        }
+
+        // ---- 登入日誌 ----
+
+        async function loadLogs() {
+            try {
+                const resp = await fetch('/api/auth/login-logs');
+                const data = await resp.json();
+                const tbody = document.getElementById('logs-tbody');
+                if (!Array.isArray(data) || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#8b949e;">沒有日誌記錄</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.map(l => {
+                    const successClass = l.success ? 'log-success' : 'log-fail';
+                    const resultText = l.success ? '✅ 成功' : '❌ 失敗';
+                    return `<tr>
+                        <td>${l.timestamp}</td>
+                        <td>${l.username}</td>
+                        <td>${l.ip_address}</td>
+                        <td class="${successClass}">${resultText}</td>
+                        <td class="log-reason">${l.reason || '-'}</td>
+                    </tr>`;
+                }).join('');
+            } catch (e) {
+                showMsg('error', '載入日誌失敗: ' + e.message);
+            }
+        }
+
+        async function clearLogs() {
+            if (!confirm('確定要清除所有登入日誌嗎？')) return;
+            try {
+                const resp = await fetch('/api/auth/login-logs', { method: 'DELETE' });
+                const data = await resp.json();
+                if (data.status === 'ok') { showMsg('success', data.message); loadLogs(); }
+                else showMsg('error', data.message);
+            } catch (e) { showMsg('error', e.message); }
+        }
+
+        // Initial load
+        loadUsers();
+        loadLogs();
+    </script>
+</body>
+</html>

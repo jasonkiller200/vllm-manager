@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>vLLM Manager - 登入</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 420px;
+            padding: 20px;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .login-header h1 {
+            font-size: 2em;
+            color: #58a6ff;
+            margin-bottom: 8px;
+        }
+
+        .login-header .subtitle {
+            color: #8b949e;
+            font-size: 0.9em;
+        }
+
+        .login-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85em;
+            color: #8b949e;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px 14px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 1em;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 12px;
+            background: #238636;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 8px;
+        }
+
+        .btn-login:hover {
+            background: #2ea043;
+        }
+
+        .btn-login:disabled {
+            background: #21262d;
+            color: #484f58;
+            cursor: not-allowed;
+        }
+
+        .error-message {
+            background: #44111a;
+            color: #f85149;
+            padding: 12px 14px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 0.85em;
+            border-left: 3px solid #f85149;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .lock-warning {
+            background: #3d2e00;
+            color: #d29922;
+            padding: 12px 14px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 0.85em;
+            border-left: 3px solid #d29922;
+            display: none;
+        }
+
+        .lock-warning.show {
+            display: block;
+        }
+
+        .login-footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #8b949e;
+            font-size: 0.8em;
+        }
+
+        /* GPU status animation in background */
+        .bg-decoration {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: -1;
+            opacity: 0.03;
+            background: 
+                radial-gradient(circle at 20% 20%, #58a6ff 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, #3fb950 0%, transparent 50%);
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-decoration"></div>
+    
+    <div class="login-container">
+        <div class="login-header">
+            <h1>🚀 vLLM Manager</h1>
+            <div class="subtitle">請登入以繼續</div>
+        </div>
+
+        <div class="login-card">
+            <div id="error-msg" class="error-message"></div>
+            <div id="lock-warning" class="lock-warning"></div>
+            
+            <form id="login-form">
+                <div class="form-group">
+                    <label>帳號</label>
+                    <input type="text" id="username" name="username" placeholder="請輸入帳號" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label>密碼</label>
+                    <input type="password" id="password" name="password" placeholder="請輸入密碼" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn-login" id="login-btn">登入</button>
+            </form>
+        </div>
+
+        <div class="login-footer">
+            vLLM Manager &copy; {{ now.year }}
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('login-form');
+        const errorMsg = document.getElementById('error-msg');
+        const lockWarning = document.getElementById('lock-warning');
+        const loginBtn = document.getElementById('login-btn');
+
+        // Show error from flash message
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                const flashes = {{ messages | tojson }};
+                flashes.forEach(([category, message]) => {
+                    if (category === 'error') {
+                        errorMsg.textContent = message;
+                        errorMsg.classList.add('show');
+                    } else if (category === 'warning') {
+                        lockWarning.textContent = message;
+                        lockWarning.classList.add('show');
+                    } else if (category === 'success') {
+                        // Auto-redirect on success
+                        setTimeout(() => window.location.href = '/', 1000);
+                    }
+                });
+            {% endif %}
+        {% endwith %}
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            errorMsg.classList.remove('show');
+            lockWarning.classList.remove('show');
+            loginBtn.disabled = true;
+            loginBtn.textContent = '登入中...';
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.status === 'ok') {
+                    // Login successful
+                    window.location.href = '/';
+                } else {
+                    errorMsg.textContent = data.message || '登入失敗';
+                    errorMsg.classList.add('show');
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = '登入';
+                    
+                    if (data.locked) {
+                        lockWarning.textContent = '⚠️ 帳號已鎖定，請稍後再試';
+                        lockWarning.classList.add('show');
+                    }
+                }
+            } catch (err) {
+                errorMsg.textContent = '連線錯誤，請稍後再試';
+                errorMsg.classList.add('show');
+                loginBtn.disabled = false;
+                loginBtn.textContent = '登入';
+            }
+        });
+
+        // Focus on username field
+        document.getElementById('username').focus();
+    </script>
+</body>
+</html>

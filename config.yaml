@@ -25,10 +25,10 @@ models:
     dtype: float16
     enable_auto_tool_choice: true
     enable_prefix_caching: false
-    gpu_memory_utilization: 0.85
+    gpu_memory_utilization: 0.88
     host: 0.0.0.0
     kv_cache_dtype: fp8
-    max_model_len: 64000
+    max_model_len: 65536
     max_num_batched_tokens: 6144
     max_num_seqs: 8
     port: 8001
