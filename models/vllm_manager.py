@@ -91,18 +91,53 @@ class VLLMManager:
             return min(pids)  # 最早的進程是主進程
         return None
 
+    def _get_model_params(self, model_path):
+        """取得模型的獨立參數 (從 model.entry.params)"""
+        for entry in self.config.get("models", []):
+            if entry.get("path") == model_path:
+                return entry.get("params", {})
+        return {}
+
+    def _get_model_name(self, model_path):
+        """從 model entry 取得模型名稱"""
+        for entry in self.config.get("models", []):
+            if entry.get("path") == model_path:
+                return entry.get("name", model_path)
+        return model_path
+
+    def get_model_params(self):
+        """取得目前啟用模型的合併參數 (defaults + model.params)"""
+        model = self._get_enabled_model()
+        if not model:
+            return {"status": "error", "message": "沒有啟用的模型", "params": {}}
+        defaults = self.config.get("defaults", {})
+        model_params = self._get_model_params(model)
+        merged = {**defaults, **model_params}
+        return {"status": "ok", "model": model, "name": self._get_model_name(model), "params": merged}
+
+    def update_model_params(self, params):
+        """儲存參數到目前啟用模型的 params"""
+        model = self._get_enabled_model()
+        if not model:
+            return {"status": "error", "message": "沒有啟用的模型"}
+        for entry in self.config.get("models", []):
+            if entry.get("path") == model:
+                if "params" not in entry:
+                    entry["params"] = {}
+                entry["params"].update(params)
+                self._save_config()
+                return {"status": "saved", "model": model}
+        return {"status": "error", "message": "找不到模型"}
+
     def start(self, model_path=None, params=None):
         """啟動 vLLM 服務
 
         Args:
             model_path: 模型路徑，None 則用 config 中 enabled 的模型
-            params: 參數覆寫 dict
+            params: 參數覆寫 dict (runtime override)
         """
         if self.is_running:
             return {"status": "already_running", "pid": self.pid}
-
-        defaults = self.config.get("defaults", {})
-        settings = {**defaults, **(params or {})}
 
         # 選模型
         if model_path:
@@ -111,6 +146,11 @@ class VLLMManager:
             model = self._get_enabled_model()
             if not model:
                 return {"status": "error", "message": "沒有啟用的模型"}
+
+        # 參數合併: defaults → model.params → runtime params
+        defaults = self.config.get("defaults", {})
+        model_params = self._get_model_params(model)
+        settings = {**defaults, **model_params, **(params or {})}
 
         venv_python = Path(self.config["venv_path"]) / "bin" / "python3"
 
@@ -125,6 +165,7 @@ class VLLMManager:
             "--kv-cache-dtype", str(settings.get("kv_cache_dtype", "fp8")),
             "--gpu-memory-utilization", str(settings.get("gpu_memory_utilization", 0.9)),
             "--max-num-seqs", str(settings.get("max_num_seqs", 4)),
+            "--max-num-batched-tokens", str(settings.get("max_num_batched_tokens", 4096)),
             "--enable-prefix-caching",
             "--enable-auto-tool-choice",
             "--tool-call-parser", str(settings.get("tool_call_parser", "qwen3_xml")),

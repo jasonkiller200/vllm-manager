@@ -86,6 +86,23 @@ def api_update_config():
     return jsonify(result)
 
 
+# ---- 模型參數 (per-model params) ----
+
+@app.route("/api/model-params", methods=["GET"])
+def api_get_model_params():
+    """取得目前啟用模型的合併參數 (defaults + model.params)"""
+    result = manager.get_model_params()
+    return jsonify(result)
+
+
+@app.route("/api/model-params", methods=["POST"])
+def api_update_model_params():
+    """儲存參數到目前啟用模型的 params"""
+    data = request.get_json(silent=True) or {}
+    result = manager.update_model_params(data)
+    return jsonify(result)
+
+
 # ---- 模型管理 ----
 
 @app.route("/api/models", methods=["GET"])

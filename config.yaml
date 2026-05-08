@@ -7,6 +7,7 @@ defaults:
   host: 0.0.0.0
   kv_cache_dtype: fp8
   max_model_len: 96000
+  max_num_batched_tokens: 4096
   max_num_seqs: 4
   port: 8001
   speculative_enabled: false
@@ -21,8 +22,24 @@ models:
 - enabled: true
   name: Qwen3.5-4B-AWQ-BF16-INT8
   path: /home/jason/models/Qwen3.5-4B-AWQ-BF16-INT8
+  params:
+    max_model_len: 32768
+    gpu_memory_utilization: 0.95
+    max_num_seqs: 8
+    max_num_batched_tokens: 4096
+    speculative_enabled: true
+    speculative_method: mtp
+    speculative_num_tokens: 1
 - enabled: false
   name: Qwen3.5-9B-AWQ-4bit
   path: /home/jason/models/Qwen3.5-9B-AWQ-4bit
+  params:
+    max_model_len: 32768
+    gpu_memory_utilization: 0.9
+    max_num_seqs: 4
+    max_num_batched_tokens: 4096
+    speculative_enabled: true
+    speculative_method: mtp
+    speculative_num_tokens: 1
 models_dir: /home/jason/models
 venv_path: /home/jason/vllm/venv

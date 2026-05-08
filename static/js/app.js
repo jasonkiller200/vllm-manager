@@ -6,6 +6,7 @@ const API = {
     stop: '/api/stop',
     restart: '/api/restart',
     config: '/api/config',
+    modelParams: '/api/model-params',
     models: '/api/models',
     modelsScan: '/api/models/scan',
     modelsClone: '/api/models/clone',
@@ -19,7 +20,7 @@ let refreshTimer = null;
 // ---- 初始化 ----
 
 document.addEventListener('DOMContentLoaded', () => {
-    loadConfig();
+    loadModelParams();
     refreshAll();
     // 每 5 秒自動刷新狀態
     refreshTimer = setInterval(refreshAll, 5000);
@@ -33,29 +34,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-async function loadConfig() {
-    const resp = await fetchJSON(API.config);
-    if (resp && resp.defaults) {
-        const d = resp.defaults;
-        setVal('param-port', d.port);
-        setVal('param-host', d.host);
-        setVal('param-dtype', d.dtype);
-        setVal('param-max-model-len', d.max_model_len);
-        setVal('param-gpu-memory-utilization', d.gpu_memory_utilization);
-        setVal('param-max-num-seqs', d.max_num_seqs);
-        setVal('param-kv-cache-dtype', d.kv_cache_dtype);
-        setVal('param-tool-call-parser', d.tool_call_parser);
-        setChecked('param-enable-prefix-caching', d.enable_prefix_caching);
-        setChecked('param-enable-auto-tool-choice', d.enable_auto_tool_choice);
-        setChecked('param-trust-remote-code', d.trust_remote_code);
-        
-        // Speculative decoding (MTP)
-        const specEnabled = d.speculative_enabled || false;
-        setChecked('param-speculative-enabled', specEnabled);
-        setVal('param-speculative-method', d.speculative_method || 'mtp');
-        setVal('param-speculative-num-tokens', d.speculative_num_tokens || 1);
-        toggleSpeculativeOptions(specEnabled);
+async function loadModelParams() {
+    const resp = await fetchJSON(API.modelParams);
+    if (!resp || resp.status !== 'ok') {
+        const label = document.getElementById('model-params-label');
+        if (label) label.textContent = resp && resp.message ? ` (${resp.message})` : ' (無啟用模型)';
+        return;
     }
+    const p = resp.params;
+    const label = document.getElementById('model-params-label');
+    if (label) label.textContent = ` — ${resp.name || resp.model}`;
+    
+    setVal('param-port', p.port);
+    setVal('param-host', p.host);
+    setVal('param-dtype', p.dtype);
+    setVal('param-max-model-len', p.max_model_len);
+    setVal('param-gpu-memory-utilization', p.gpu_memory_utilization);
+    setVal('param-max-num-seqs', p.max_num_seqs);
+    setVal('param-max-num-batched-tokens', p.max_num_batched_tokens);
+    setVal('param-kv-cache-dtype', p.kv_cache_dtype);
+    setVal('param-tool-call-parser', p.tool_call_parser);
+    setChecked('param-enable-prefix-caching', p.enable_prefix_caching);
+    setChecked('param-enable-auto-tool-choice', p.enable_auto_tool_choice);
+    setChecked('param-trust-remote-code', p.trust_remote_code);
+    
+    // Speculative decoding (MTP)
+    const specEnabled = p.speculative_enabled || false;
+    setChecked('param-speculative-enabled', specEnabled);
+    setVal('param-speculative-method', p.speculative_method || 'mtp');
+    setVal('param-speculative-num-tokens', p.speculative_num_tokens || 1);
+    toggleSpeculativeOptions(specEnabled);
 }
 
 function toggleSpeculativeOptions(enabled) {
@@ -277,7 +285,10 @@ async function enableModel(path) {
         method: 'POST',
         body: JSON.stringify({ path })
     });
-    if (resp) refreshModels((await fetchJSON(API.status))?.running || false);
+    if (resp) {
+        refreshAll();
+        loadModelParams();
+    }
 }
 
 async function removeModel(path) {
@@ -378,13 +389,14 @@ async function cloneModel() {
 
 async function saveParams(e) {
     e.preventDefault();
-    const defaults = {
+    const params = {
         port: parseInt(document.getElementById('param-port').value) || 8001,
         host: document.getElementById('param-host').value || '0.0.0.0',
         dtype: document.getElementById('param-dtype').value || 'float16',
         max_model_len: parseInt(document.getElementById('param-max-model-len').value) || 128000,
         gpu_memory_utilization: parseFloat(document.getElementById('param-gpu-memory-utilization').value) || 0.9,
         max_num_seqs: parseInt(document.getElementById('param-max-num-seqs').value) || 4,
+        max_num_batched_tokens: parseInt(document.getElementById('param-max-num-batched-tokens').value) || 0,
         kv_cache_dtype: document.getElementById('param-kv-cache-dtype').value || 'fp8',
         tool_call_parser: document.getElementById('param-tool-call-parser').value || 'qwen3_xml',
         enable_prefix_caching: document.getElementById('param-enable-prefix-caching').checked,
@@ -394,12 +406,13 @@ async function saveParams(e) {
         speculative_method: document.getElementById('param-speculative-method').value || 'mtp',
         speculative_num_tokens: parseInt(document.getElementById('param-speculative-num-tokens').value) || 1,
     };
-    const resp = await fetchJSON(API.config, {
+    const resp = await fetchJSON(API.modelParams, {
         method: 'POST',
-        body: JSON.stringify({ defaults })
+        body: JSON.stringify(params)
     });
     if (resp && resp.status === 'saved') {
-        alert('參數已儲存');
+        alert(`參數已儲存 (${resp.model})`);
+        loadModelParams();
     }
 }
 
