@@ -16,6 +16,31 @@ const API = {
     gpu: '/api/gpu',
 };
 let refreshTimer = null;
+let paramsHasChanges = false;
+
+// ---- 未儲存提示 ----
+
+function markParamsChanged() {
+    if (!paramsHasChanges) {
+        paramsHasChanges = true;
+        const badge = document.getElementById('unsaved-badge');
+        if (badge) badge.style.display = 'inline';
+    }
+}
+
+function clearParamsChanged() {
+    paramsHasChanges = false;
+    const badge = document.getElementById('unsaved-badge');
+    if (badge) badge.style.display = 'none';
+}
+
+// 離開頁面時提醒
+window.addEventListener('beforeunload', (e) => {
+    if (paramsHasChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
 
 // ---- 初始化 ----
 
@@ -25,6 +50,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // 每 5 秒自動刷新狀態
     refreshTimer = setInterval(refreshAll, 5000);
     
+    // 監聽所有參數欄位的變動
+    const form = document.getElementById('params-form');
+    if (form) {
+        form.addEventListener('input', markParamsChanged);
+        form.addEventListener('change', markParamsChanged);
+    }
+
     // MTP checkbox toggle
     const specCheckbox = document.getElementById('param-speculative-enabled');
     if (specCheckbox) {
@@ -39,6 +71,7 @@ async function loadModelParams() {
     if (!resp || resp.status !== 'ok') {
         const label = document.getElementById('model-params-label');
         if (label) label.textContent = resp && resp.message ? ` (${resp.message})` : ' (無啟用模型)';
+        clearParamsChanged();
         return;
     }
     const p = resp.params;
@@ -64,6 +97,8 @@ async function loadModelParams() {
     setVal('param-speculative-method', p.speculative_method || 'mtp');
     setVal('param-speculative-num-tokens', p.speculative_num_tokens || 1);
     toggleSpeculativeOptions(specEnabled);
+    
+    clearParamsChanged();
 }
 
 function toggleSpeculativeOptions(enabled) {
@@ -412,6 +447,7 @@ async function saveParams(e) {
     });
     if (resp && resp.status === 'saved') {
         alert(`參數已儲存 (${resp.model})`);
+        clearParamsChanged();
         loadModelParams();
     }
 }

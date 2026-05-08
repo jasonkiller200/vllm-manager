@@ -76,6 +76,11 @@ header h1 {
     color: #f85149;
 }
 
+.badge-warning {
+    background: #3d2e00;
+    color: #d29922;
+}
+
 /* 按鈕 */
 .controls {
     display: flex;

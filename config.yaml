@@ -29,7 +29,7 @@ models:
     host: 0.0.0.0
     kv_cache_dtype: fp8
     max_model_len: 64000
-    max_num_batched_tokens: 4096
+    max_num_batched_tokens: 5120
     max_num_seqs: 8
     port: 8001
     speculative_enabled: true
