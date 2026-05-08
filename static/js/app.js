@@ -81,7 +81,7 @@ async function loadModelParams() {
     setVal('param-port', p.port);
     setVal('param-host', p.host);
     setVal('param-dtype', p.dtype);
-    setVal('param-max-model-len', p.max_model_len);
+    setVal('param-max-model-len', Math.round(p.max_model_len / 1024));
     setVal('param-gpu-memory-utilization', p.gpu_memory_utilization);
     setVal('param-max-num-seqs', p.max_num_seqs);
     setVal('param-max-num-batched-tokens', p.max_num_batched_tokens);
@@ -442,7 +442,7 @@ async function saveParams(e) {
         port: parseInt(document.getElementById('param-port').value) || 8001,
         host: document.getElementById('param-host').value || '0.0.0.0',
         dtype: document.getElementById('param-dtype').value || 'float16',
-        max_model_len: parseInt(document.getElementById('param-max-model-len').value) || 128000,
+        max_model_len: (parseInt(document.getElementById('param-max-model-len').value) || 128) * 1024,
         gpu_memory_utilization: parseFloat(document.getElementById('param-gpu-memory-utilization').value) || 0.9,
         max_num_seqs: parseInt(document.getElementById('param-max-num-seqs').value) || 4,
         max_num_batched_tokens: parseInt(document.getElementById('param-max-num-batched-tokens').value) || 0,
