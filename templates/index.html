@@ -171,9 +171,9 @@
                                         <strong>1. Generation Throughput (tokens/s)</strong><br>
                                         &nbsp;&nbsp;每秒產生的 token 數量。用於比對開啟 MTP 前後的速度改善幅度 —— 數字越高代表輸出越快。<br><br>
                                         <strong>2. Acceptance Rate (%)</strong><br>
-                                        &nbsp;&nbsp;MTP 預猜 token 被模型接受的比率。數值越高代表預猜越精準，MTP 加速效果越好。一般 80%~95% 算理想範圍。<br><br>
+                                        &nbsp;&nbsp;MTP 預猜 token 被模型接受的比率。數值越高代表預猜越精準，MTP 加速效果越好。一般 80%~95% 算理想範圍，理論上限為 <strong>100%</strong>。<br><br>
                                         <strong>3. Mean Acceptance Length</strong><br>
-                                        &nbsp;&nbsp;每次 MTP 步驟平均接受的 token 數量。理論上限等於 <code>num_speculative_tokens</code> + 1。數值越接近上限代表預猜效率越高。<br><br>
+                                        &nbsp;&nbsp;每次 MTP 步驟平均接受的 token 數量。理論上限為 <code>num_speculative_tokens</code> + 1（例如 num=1 時上限為 2，num=2 時上限為 3）。數值越接近上限代表預猜效率越高。<br><br>
                                         調整參數時建議以這三個指標作為參考，觀測改善前後變化。
                                     </div>
                                 </div>
