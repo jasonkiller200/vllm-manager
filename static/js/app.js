@@ -108,6 +108,20 @@ function toggleSpeculativeOptions(enabled) {
     }
 }
 
+function toggleMtpTuning() {
+    const content = document.getElementById('mtp-tuning-content');
+    const arrow = document.getElementById('mtp-tuning-arrow');
+    if (content) {
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            arrow.textContent = '▲';
+        } else {
+            content.style.display = 'none';
+            arrow.textContent = '▼';
+        }
+    }
+}
+
 // ---- 刷新 ----
 
 async function refreshAll() {

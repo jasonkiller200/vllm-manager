@@ -32,7 +32,7 @@ models:
     max_num_batched_tokens: 6144
     max_num_seqs: 8
     port: 8001
-    speculative_enabled: true
+    speculative_enabled: false
     speculative_method: mtp
     speculative_num_tokens: 1
     tool_call_parser: qwen3_xml

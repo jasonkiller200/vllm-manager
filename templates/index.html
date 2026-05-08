@@ -162,6 +162,19 @@
                                     &nbsp;&nbsp;• num_speculative_tokens=3 → 6144 ~ 8192<br>
                                     批次越大加速越好，但會吃更多記憶體。重啟後生效。
                                 </div>
+                                <div style="margin-top: 8px;">
+                                    <div onclick="toggleMtpTuning()" style="cursor: pointer; font-size: 0.75em; color: #3fb950; padding: 6px 8px; background: #0d4429; border-radius: 4px; border-left: 3px solid #3fb950; user-select: none;">
+                                        📊 MTP 調參參考 <span id="mtp-tuning-arrow">▼</span>
+                                    </div>
+                                    <div id="mtp-tuning-content" style="display: none; font-size: 0.75em; color: #c9d1d9; margin-top: 4px; line-height: 1.6; background: #0d1117; padding: 8px; border-radius: 4px; border: 1px solid #21262d;">
+                                        <strong>✅ 最佳化參數參考 (num_speculative_tokens=1)：</strong><br>
+                                        • Generation Throughput：最高達到 <strong>122.8 tokens/s</strong>（非常不錯）<br>
+                                        • Acceptance Rate：最高 <strong>93.4%</strong>，多數在 84%~93% 之間（對 num=1 來說算優秀）<br>
+                                        • Mean Acceptance Length：最高接近 <strong>1.93</strong>（接近理想值 2.0）<br>
+                                        <br>
+                                        整體來說，這組參數已經調得相當不錯，MTP 有發揮明顯加速效果。
+                                    </div>
+                                </div>
                             </div>
                             <div style="font-size: 0.75em; color: #8b949e; margin-top: 4px;">
                                 僅適用於有 MTP 訓練的模型 (如 Qwen3.5, Qwen3.6)。重啟後生效。
