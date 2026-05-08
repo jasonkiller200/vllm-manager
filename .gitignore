@@ -5,3 +5,5 @@ __pycache__/
 logs/
 plans/
 project.md
+data/*.db
+data/*.sqlite

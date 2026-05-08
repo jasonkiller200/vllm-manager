@@ -165,8 +165,14 @@ class VLLMManager:
             model_path: 模型路徑，None 則用 config 中 enabled 的模型
             params: 參數覆寫 dict (runtime override)
         """
+        # 如果指定不同模型且目前有在跑，先停掉舊的
         if self.is_running:
-            return {"status": "already_running", "pid": self.pid}
+            if model_path:
+                # 換模型 — 先停舊的再啟新的
+                self.stop()
+                time.sleep(3)
+            else:
+                return {"status": "already_running", "pid": self.pid}
 
         # 選模型
         if model_path:

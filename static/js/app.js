@@ -342,7 +342,13 @@ async function enableModel(path) {
 
 async function removeModel(path) {
     if (!confirm(`確定要移除模型: ${path} ?`)) return;
-    await fetchJSON(`${API.models}?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
+    const resp = await fetchJSON(`${API.models}/remove`, {
+        method: 'POST',
+        body: JSON.stringify({ path })
+    });
+    if (resp) {
+        alert(`移除結果: ${resp.status}`);
+    }
     refreshModels();
 }
 
