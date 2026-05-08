@@ -9,6 +9,9 @@ defaults:
   max_model_len: 96000
   max_num_seqs: 4
   port: 8001
+  speculative_enabled: false
+  speculative_method: mtp
+  speculative_num_tokens: 1
   tool_call_parser: qwen3_xml
   trust_remote_code: true
   uvicorn_log_level: info

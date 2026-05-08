@@ -23,6 +23,14 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshAll();
     // 每 5 秒自動刷新狀態
     refreshTimer = setInterval(refreshAll, 5000);
+    
+    // MTP checkbox toggle
+    const specCheckbox = document.getElementById('param-speculative-enabled');
+    if (specCheckbox) {
+        specCheckbox.addEventListener('change', (e) => {
+            toggleSpeculativeOptions(e.target.checked);
+        });
+    }
 });
 
 async function loadConfig() {
@@ -40,6 +48,20 @@ async function loadConfig() {
         setChecked('param-enable-prefix-caching', d.enable_prefix_caching);
         setChecked('param-enable-auto-tool-choice', d.enable_auto_tool_choice);
         setChecked('param-trust-remote-code', d.trust_remote_code);
+        
+        // Speculative decoding (MTP)
+        const specEnabled = d.speculative_enabled || false;
+        setChecked('param-speculative-enabled', specEnabled);
+        setVal('param-speculative-method', d.speculative_method || 'mtp');
+        setVal('param-speculative-num-tokens', d.speculative_num_tokens || 1);
+        toggleSpeculativeOptions(specEnabled);
+    }
+}
+
+function toggleSpeculativeOptions(enabled) {
+    const options = document.getElementById('speculative-options');
+    if (options) {
+        options.style.display = enabled ? 'block' : 'none';
     }
 }
 
@@ -368,6 +390,9 @@ async function saveParams(e) {
         enable_prefix_caching: document.getElementById('param-enable-prefix-caching').checked,
         enable_auto_tool_choice: document.getElementById('param-enable-auto-tool-choice').checked,
         trust_remote_code: document.getElementById('param-trust-remote-code').checked,
+        speculative_enabled: document.getElementById('param-speculative-enabled').checked,
+        speculative_method: document.getElementById('param-speculative-method').value || 'mtp',
+        speculative_num_tokens: parseInt(document.getElementById('param-speculative-num-tokens').value) || 1,
     };
     const resp = await fetchJSON(API.config, {
         method: 'POST',

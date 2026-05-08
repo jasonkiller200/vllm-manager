@@ -132,6 +132,31 @@
                         <label><input type="checkbox" id="param-enable-auto-tool-choice" checked> Auto Tool Choice</label>
                         <label><input type="checkbox" id="param-trust-remote-code" checked> Trust Remote Code</label>
                     </div>
+
+                    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+                        <h3 style="font-size: 0.9em; margin-bottom: 10px; color: #f0883e;">⚡ Speculative Decoding (MTP)</h3>
+                        <div style="margin-bottom: 8px;">
+                            <label><input type="checkbox" id="param-speculative-enabled"> 啟用 MTP Speculative Decoding</label>
+                            <div id="speculative-options" style="display: none; margin-top: 8px; padding-left: 20px;">
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label>Method</label>
+                                        <select id="param-speculative-method">
+                                            <option value="mtp" selected>mtp</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Num Speculative Tokens</label>
+                                        <input type="number" id="param-speculative-num-tokens" value="1" min="1" max="10" step="1">
+                                    </div>
+                                </div>
+                                <div style="font-size: 0.75em; color: #8b949e; margin-top: 4px;">
+                                    僅適用於有 MTP 訓練的模型 (如 Qwen3.6)。重啟後生效。
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <button type="submit" class="btn btn-sm btn-green">儲存參數</button>
                 </form>
             </div>

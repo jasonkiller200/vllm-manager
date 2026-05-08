@@ -133,6 +133,19 @@ class VLLMManager:
             "--uvicorn-log-level", str(settings.get("uvicorn_log_level", "info")),
         ]
 
+        # Speculative decoding (MTP)
+        spec_enabled = settings.get("speculative_enabled", False)
+        spec_method = settings.get("speculative_method", "mtp")
+        spec_num_tokens = settings.get("speculative_num_tokens", 1)
+
+        if spec_enabled:
+            import json
+            spec_config = json.dumps({
+                "method": spec_method,
+                "num_speculative_tokens": spec_num_tokens
+            })
+            cmd.extend(["--speculative-config", spec_config])
+
         # 寫日誌到檔案
         log_file = self.log_dir / f"vllm_{int(time.time())}.log"
 
@@ -212,7 +225,11 @@ class VLLMManager:
     def update_config(self, updates):
         """更新設定"""
         if "defaults" in updates:
-            self.config["defaults"].update(updates["defaults"])
+            # 支援個別欄位或整個 defaults 覆寫
+            if isinstance(updates["defaults"], dict):
+                self.config["defaults"].update(updates["defaults"])
+            else:
+                self.config["defaults"] = updates["defaults"]
         if "models" in updates:
             self.config["models"] = updates["models"]
         if "log_max_lines" in updates:
