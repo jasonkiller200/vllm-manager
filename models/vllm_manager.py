@@ -35,6 +35,9 @@ class VLLMManager:
         self._process = None  # subprocess.Popen instance
         self._detect_running()
         
+        # Auto-start last running model if enabled
+        self._auto_start_model()
+        
         # Clone state
         self._clone_proc = None
         self._clone_result = None
@@ -43,6 +46,32 @@ class VLLMManager:
         self._clone_model_name = ""
         self._clone_model_dir = None
         self._clone_thread = None
+
+    def _auto_start_model(self):
+        """If auto_start is enabled and vLLM is not running, start the last enabled model."""
+        if not self.config.get("auto_start", True):
+            return
+        if self.is_running:
+            return  # Already running, skip
+        # Try the last explicitly marked running model, or fall back to enabled model
+        last_model = self.config.get("last_running_model")
+        model_path = last_model or self._get_enabled_model()
+        if not model_path:
+            return
+        # Start in background thread to not block web UI
+        def _do_auto_start():
+            import time
+            time.sleep(3)  # Wait for web UI to be ready
+            try:
+                result = self.start(model_path=model_path)
+                if result.get("status") == "started":
+                    print(f"[AUTO-START] vLLM started: {model_path} (PID {result.get('pid')})")
+                else:
+                    print(f"[AUTO-START] Failed to start vLLM: {result.get('message', 'unknown')}")
+            except Exception as e:
+                print(f"[AUTO-START] Error: {e}")
+        t = threading.Thread(target=_do_auto_start, daemon=True)
+        t.start()
 
     def _load_config(self):
         """載入 YAML 設定"""
@@ -198,6 +227,9 @@ class VLLMManager:
                     stderr=subprocess.STDOUT,
                     start_new_session=True
                 )
+            # Track last running model for auto-start on restart
+            self.config["last_running_model"] = model
+            self._save_config()
             time.sleep(2)  # 等進程初始化
             return {
                 "status": "started",
@@ -225,6 +257,10 @@ class VLLMManager:
             return {"status": "error", "message": str(e)}
 
         self._process = None
+        # Clear last running model on stop
+        if "last_running_model" in self.config:
+            del self.config["last_running_model"]
+            self._save_config()
         return {"status": "stopped", "pids": pids}
 
     def restart(self, model_path=None, params=None):

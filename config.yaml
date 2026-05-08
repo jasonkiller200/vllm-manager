@@ -1,3 +1,4 @@
+auto_start: true
 defaults:
   disable_log_requests: true
   dtype: float16
