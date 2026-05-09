@@ -165,16 +165,13 @@ class VLLMManager:
             model_path: 模型路徑，None 則用 config 中 enabled 的模型
             params: 參數覆寫 dict (runtime override)
         """
-        # 如果指定不同模型且目前有在跑，先停掉舊的
         if self.is_running:
             if model_path:
-                # 換模型 — 先停舊的再啟新的
                 self.stop()
                 time.sleep(3)
             else:
                 return {"status": "already_running", "pid": self.pid}
 
-        # 選模型
         if model_path:
             model = model_path
         else:
@@ -182,14 +179,12 @@ class VLLMManager:
             if not model:
                 return {"status": "error", "message": "沒有啟用的模型"}
 
-        # 參數合併: defaults → model.params → runtime params
         defaults = self.config.get("defaults", {})
         model_params = self._get_model_params(model)
         settings = {**defaults, **model_params, **(params or {})}
 
         venv_python = Path(self.config["venv_path"]) / "bin" / "python3"
 
-        # 組建命令
         cmd = [
             str(venv_python), "-m", "vllm.entrypoints.openai.api_server",
             "--model", model,
@@ -209,7 +204,6 @@ class VLLMManager:
             "--uvicorn-log-level", str(settings.get("uvicorn_log_level", "info")),
         ]
 
-        # Speculative decoding (MTP)
         spec_enabled = settings.get("speculative_enabled", False)
         spec_method = settings.get("speculative_method", "mtp")
         spec_num_tokens = settings.get("speculative_num_tokens", 1)
@@ -222,7 +216,6 @@ class VLLMManager:
             })
             cmd.extend(["--speculative-config", spec_config])
 
-        # 寫日誌到檔案
         log_file = self.log_dir / f"vllm_{int(time.time())}.log"
 
         try:
@@ -233,12 +226,11 @@ class VLLMManager:
                     stderr=subprocess.STDOUT,
                     start_new_session=True
                 )
-            # Track last running model for auto-start on restart
             self.config["last_running_model"] = model
             self._save_config()
-            time.sleep(2)  # 等進程初始化
+            
             return {
-                "status": "started",
+                "status": "starting",
                 "pid": self._process.pid,
                 "port": settings.get("port", 8001),
                 "model": model,
@@ -332,6 +324,7 @@ class VLLMManager:
         pos = 0
         newline = "\n"
         data_prefix = "data: "
+        idle_count = 0
         while True:
             current_log = self.get_log_file()
             if current_log and current_log != log_file:
@@ -345,14 +338,23 @@ class VLLMManager:
                         new_lines = f.readlines()
                         if new_lines:
                             pos = f.tell()
+                            idle_count = 0
                             for line in new_lines:
                                 yield f"{data_prefix}{line.rstrip(newline)}{newline}{newline}"
+                        else:
+                            idle_count += 1
                 except FileNotFoundError:
                     log_file = None
+                    idle_count = 0
             else:
+                idle_count += 1
                 yield f"{data_prefix}[等待 vLLM 啟動...]@{newline}{newline}"
             
-            time.sleep(1)
+            if idle_count >= 20:
+                idle_count = 0
+                yield f"{data_prefix}[心跳]@{newline}{newline}"
+            
+            time.sleep(0.5)
 
     def get_logs(self, lines=100):
         """取得最新 vLLM 日誌
@@ -415,6 +417,88 @@ class VLLMManager:
             return gpus
         except Exception as e:
             return [{"error": str(e)}]
+
+    def get_cpu_info(self):
+        """取得 CPU/RAM 狀態"""
+        try:
+            result = subprocess.run(
+                ["ps", "-C", "python3", "-o", "%cpu,%mem,cmd", "--no-headers"],
+                capture_output=True, text=True, timeout=5
+            )
+            total_cpu = 0.0
+            total_mem = 0.0
+            if result.returncode == 0:
+                for line in result.stdout.strip().split("\n"):
+                    if line.strip():
+                        parts = line.strip().split()
+                        if len(parts) >= 2:
+                            try:
+                                total_cpu += float(parts[0])
+                                total_mem += float(parts[1])
+                            except ValueError:
+                                pass
+
+            result = subprocess.run(
+                ["cat", "/proc/meminfo"],
+                capture_output=True, text=True, timeout=5
+            )
+            mem_total = mem_free = mem_available = swap_total = swap_used = 0
+            for line in result.stdout.strip().split("\n"):
+                if line.startswith("MemTotal:"):
+                    mem_total = int(line.split()[1]) / 1024
+                elif line.startswith("MemFree:"):
+                    mem_free = int(line.split()[1]) / 1024
+                elif line.startswith("MemAvailable:"):
+                    mem_available = int(line.split()[1]) / 1024
+                elif line.startswith("SwapTotal:"):
+                    swap_total = int(line.split()[1]) / 1024
+                elif line.startswith("SwapFree:"):
+                    swap_free = int(line.split()[1]) / 1024
+                    swap_used = swap_total - swap_free
+
+            cpu_count = os.cpu_count() or 1
+            load_avg = []
+            try:
+                with open("/proc/loadavg", "r") as f:
+                    la = f.read().split()
+                    load_avg = [float(la[i]) for i in range(3)]
+            except Exception:
+                pass
+
+            temps = {}
+            for hwmon in Path("/sys/class/hwmon").iterdir() if Path("/sys/class/hwmon").exists() else []:
+                try:
+                    name_file = hwmon / "name"
+                    if name_file.exists():
+                        name = name_file.read_text().strip()
+                        if name in ("coretemp", "cpu_thermal", "k10temp", "nvme"):
+                            for temp_file in sorted((hwmon / "device" / "temp*_input" if (hwmon / "device").exists() else hwmon.glob("temp*_input"))):
+                                label_file = temp_file.parent / (temp_file.name.replace("_input", "_label"))
+                                label = label_file.read_text().strip() if label_file.exists() else f"temp{len(temps)}"
+                                temp = int(temp_file.read_text().strip()) / 1000
+                                temps[label] = round(temp, 1)
+                            if temps:
+                                break
+                except Exception:
+                    pass
+
+            return {
+                "cpu_count": cpu_count,
+                "cpu_percent": round(total_cpu, 1),
+                "mem_percent": round(total_mem, 1),
+                "mem_total_mb": round(mem_total),
+                "mem_used_mb": round(mem_total - mem_free),
+                "mem_free_mb": round(mem_free),
+                "mem_available_mb": round(mem_available),
+                "swap_total_mb": round(swap_total),
+                "swap_used_mb": round(swap_used),
+                "load_avg_1m": round(load_avg[0], 2) if len(load_avg) > 0 else 0,
+                "load_avg_5m": round(load_avg[1], 2) if len(load_avg) > 1 else 0,
+                "load_avg_15m": round(load_avg[2], 2) if len(load_avg) > 2 else 0,
+                "temperatures": temps,
+            }
+        except Exception as e:
+            return {"error": str(e)}
 
     def _get_enabled_model(self):
         """取得 config 中 enabled=true 的模型路徑"""
