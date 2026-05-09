@@ -495,6 +495,7 @@ def api_logs_stream():
         mimetype="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         }
     )
@@ -508,6 +509,14 @@ def api_gpu():
     if not user:
         return jsonify({"status": "error", "message": "需要登入"}), 401
     return jsonify(manager.get_gpu_info())
+
+
+@app.route("/api/cpu")
+def api_cpu():
+    user = require_login()
+    if not user:
+        return jsonify({"status": "error", "message": "需要登入"}), 401
+    return jsonify(manager.get_cpu_info())
 
 
 if __name__ == "__main__":
