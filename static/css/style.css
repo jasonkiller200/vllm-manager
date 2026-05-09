@@ -81,6 +81,17 @@ header h1 {
     color: #d29922;
 }
 
+.badge-starting {
+    background: #2d2000;
+    color: #d29922;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
 /* 按鈕 */
 .controls {
     display: flex;
@@ -284,6 +295,67 @@ input:focus, select:focus {
 
 .gpu-stat .stat-value {
     color: #c9d1d9;
+}
+
+.sys-card {
+    background: #0d1117;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.sys-card:last-child { margin-bottom: 0; }
+
+.sys-title {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #58a6ff;
+    margin-bottom: 12px;
+}
+
+.sys-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.sys-metric {
+    min-width: 70px;
+    text-align: center;
+}
+
+.sys-metric-value {
+    font-size: 1.4em;
+    font-weight: 700;
+    color: #c9d1d9;
+    line-height: 1;
+}
+
+.sys-unit {
+    font-size: 0.5em;
+    font-weight: 400;
+    color: #8b949e;
+    margin-left: 2px;
+}
+
+.sys-metric-label {
+    font-size: 0.7em;
+    color: #8b949e;
+    margin-top: 4px;
+}
+
+.sys-bar {
+    margin-top: 6px;
+    height: 4px;
+    background: #21262d;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.sys-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: #3fb950;
 }
 
 /* 日誌 */
