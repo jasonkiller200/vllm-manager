@@ -402,6 +402,9 @@ async function stopVLLM() {
     if (btn) btn.disabled = false;
     if (resp) {
         alert(`vLLM ${resp.status}`);
+        if (resp.status === 'stopped' || resp.status === 'not_running') {
+            await waitForStopped(10000);
+        }
         refreshAll();
     }
 }
@@ -412,6 +415,16 @@ async function waitForRunning(timeout = 15000) {
         await new Promise(r => setTimeout(r, 1000));
         const s = await fetchJSON(API.status);
         if (s?.running) return true;
+    }
+    return false;
+}
+
+async function waitForStopped(timeout = 10000) {
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeout) {
+        await new Promise(r => setTimeout(r, 500));
+        const s = await fetchJSON(API.status);
+        if (s && !s.running) return true;
     }
     return false;
 }

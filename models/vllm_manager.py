@@ -26,6 +26,7 @@ class VLLMManager:
     """管理 vLLM 子進程與設定"""
 
     _instance = None
+    _vllm_pattern = "vllm.entrypoints.openai.api_server"
 
     def __init__(self):
         self.config = self._load_config()
@@ -96,7 +97,7 @@ class VLLMManager:
     def _get_vllm_pids(self):
         """取得所有 vLLM API server 的 PID 清單"""
         result = subprocess.run(
-            ["pgrep", "-f", "vllm.entrypoints.openai.api_server"],
+            ["pgrep", "-f", self._vllm_pattern],
             capture_output=True, text=True
         )
         if result.returncode == 0:
@@ -196,13 +197,19 @@ class VLLMManager:
             "--gpu-memory-utilization", str(settings.get("gpu_memory_utilization", 0.9)),
             "--max-num-seqs", str(settings.get("max_num_seqs", 4)),
             "--max-num-batched-tokens", str(settings.get("max_num_batched_tokens", 4096)),
-            "--enable-prefix-caching",
-            "--enable-auto-tool-choice",
             "--tool-call-parser", str(settings.get("tool_call_parser", "qwen3_xml")),
-            "--trust-remote-code",
             "--no-enable-log-requests",
             "--uvicorn-log-level", str(settings.get("uvicorn_log_level", "info")),
         ]
+
+        if settings.get("enable_auto_tool_choice", True):
+            cmd.append("--enable-auto-tool-choice")
+
+        if settings.get("trust_remote_code", True):
+            cmd.append("--trust-remote-code")
+
+        if settings.get("enable_prefix_caching", False):
+            cmd.append("--enable-prefix-caching")
 
         spec_enabled = settings.get("speculative_enabled", False)
         spec_method = settings.get("speculative_method", "mtp")
@@ -246,11 +253,31 @@ class VLLMManager:
 
         pids = []
         try:
-            result = subprocess.run(
-                ["pkill", "-f", "vllm.entrypoints.openai.api_server"],
+            pids = self._get_vllm_pids()
+            subprocess.run(
+                ["pkill", "-f", self._vllm_pattern],
                 capture_output=True, text=True
             )
-            pids = [self.pid] if self.pid else []
+
+            deadline = time.time() + 8
+            while time.time() < deadline:
+                if not self._get_vllm_pids():
+                    break
+                time.sleep(0.2)
+
+            remaining = self._get_vllm_pids()
+            if remaining:
+                subprocess.run(
+                    ["pkill", "-9", "-f", self._vllm_pattern],
+                    capture_output=True, text=True
+                )
+                deadline = time.time() + 2
+                while time.time() < deadline:
+                    if not self._get_vllm_pids():
+                        break
+                    time.sleep(0.2)
+
+            remaining = self._get_vllm_pids()
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
@@ -259,6 +286,8 @@ class VLLMManager:
         if "last_running_model" in self.config:
             del self.config["last_running_model"]
             self._save_config()
+        if remaining:
+            return {"status": "partial_stopped", "pids": pids, "remaining_pids": remaining}
         return {"status": "stopped", "pids": pids}
 
     def restart(self, model_path=None, params=None):
@@ -325,11 +354,29 @@ class VLLMManager:
         newline = "\n"
         data_prefix = "data: "
         idle_count = 0
+        proc_stdout_path = None
+        proc_last_lines = []
+
+        def _tail_delta(prev_lines, curr_lines):
+            """取出 curr_lines 相對 prev_lines 的新增尾端內容。"""
+            if not prev_lines:
+                return curr_lines
+
+            max_overlap = min(len(prev_lines), len(curr_lines))
+            overlap = 0
+            for i in range(max_overlap, 0, -1):
+                if prev_lines[-i:] == curr_lines[:i]:
+                    overlap = i
+                    break
+            return curr_lines[overlap:]
+
         while True:
             current_log = self.get_log_file()
             if current_log and current_log != log_file:
                 log_file = current_log
                 pos = 0
+                proc_stdout_path = None
+                proc_last_lines = []
             
             if log_file:
                 try:
@@ -347,12 +394,47 @@ class VLLMManager:
                     log_file = None
                     idle_count = 0
             else:
-                idle_count += 1
-                yield f"{data_prefix}[等待 vLLM 啟動...]@{newline}{newline}"
+                pid = self.pid
+                proc_stdout = f"/proc/{pid}/fd/1" if pid else None
+                if proc_stdout and os.path.exists(proc_stdout):
+                    try:
+                        result = subprocess.run(
+                            ["tail", "-n", "200", proc_stdout],
+                            capture_output=True,
+                            text=True,
+                            timeout=2,
+                        )
+                        curr_lines = []
+                        if result.stdout:
+                            curr_lines = [l.rstrip(newline) for l in result.stdout.rstrip(newline).split(newline)]
+
+                        if proc_stdout_path != proc_stdout:
+                            proc_stdout_path = proc_stdout
+                            proc_last_lines = curr_lines
+                            idle_count = 0
+                            for line in curr_lines:
+                                yield f"{data_prefix}{line}{newline}{newline}"
+                        else:
+                            new_lines = _tail_delta(proc_last_lines, curr_lines)
+                            if new_lines:
+                                idle_count = 0
+                                for line in new_lines:
+                                    yield f"{data_prefix}{line}{newline}{newline}"
+                            else:
+                                idle_count += 1
+                            proc_last_lines = curr_lines
+                    except Exception:
+                        idle_count += 1
+                        yield f"{data_prefix}[等待 vLLM 啟動...]{newline}{newline}"
+                else:
+                    proc_stdout_path = None
+                    proc_last_lines = []
+                    idle_count += 1
+                    yield f"{data_prefix}[等待 vLLM 啟動...]{newline}{newline}"
             
             if idle_count >= 20:
                 idle_count = 0
-                yield f"{data_prefix}[心跳]@{newline}{newline}"
+                yield f"{data_prefix}[心跳]{newline}{newline}"
             
             time.sleep(0.5)
 

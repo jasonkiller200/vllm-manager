@@ -45,7 +45,7 @@ from models.auth import (
 )
 
 app = Flask(__name__)
-app.secret_key = 'vllm-manager-secret-key-' + str(time.time()).replace('.', '')
+app.secret_key = 'vllm-manager-secret-key-fixed'
 manager = VLLMManager()
 
 # Clone 操作狀態
@@ -73,6 +73,11 @@ def get_client_ip():
 
 
 # ---- 頁面 ----
+
+@app.route('/favicon.ico')
+def favicon():
+    # Avoid noisy 404 in browser console when no icon file is provided.
+    return Response(status=204)
 
 @app.route("/")
 def index():
@@ -483,10 +488,10 @@ def api_logs_n(n):
 
 @app.route("/api/logs/stream")
 def api_logs_stream():
+    """SSE 即時日誌串流"""
     user = require_login()
     if not user:
-        return jsonify({"status": "error", "message": "需要登入"}), 401
-    """SSE 即時日誌串流"""
+        return Response("data: [需要登入]\n\n", mimetype="text/event-stream")
     def generate():
         for chunk in manager.stream_logs():
             yield chunk
