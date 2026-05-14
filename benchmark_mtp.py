@@ -17,7 +17,6 @@ import json
 import time
 import statistics
 import subprocess
-import copy
 import yaml
 from datetime import datetime
 from pathlib import Path
@@ -99,49 +98,16 @@ def get_enabled_model():
     return None
 
 
-def snapshot_enabled_model_params():
-    """保存目前啟用模型的 params，方便 benchmark 後還原。"""
-    config = load_config()
-    for model in config.get("models", []):
-        if model.get("enabled", False):
-            return {
-                "had_params": "params" in model,
-                "params": copy.deepcopy(model.get("params", {})),
-            }
-    return {"had_params": False, "params": {}}
-
-
-def restore_enabled_model_params(snapshot):
-    """還原 benchmark 前的模型參數。"""
-    config = load_config()
-    for model in config.get("models", []):
-        if model.get("enabled", False):
-            if snapshot.get("had_params", False):
-                model["params"] = copy.deepcopy(snapshot.get("params", {}))
-            else:
-                model.pop("params", None)
-            save_config(config)
-            print("已還原 benchmark 前的模型參數")
-            return True
-    return False
-
-
 def update_benchmark_config(enable_mtp, num_tokens, spec_method, prefix_caching):
-    """更新 benchmark 所需的 MTP / prefix caching 配置並重啟 vLLM。"""
-    config = load_config()
-
-    for model in config.get("models", []):
-        if model.get("enabled", False):
-            if "params" not in model:
-                model["params"] = {}
-            model["params"]["enable_prefix_caching"] = prefix_caching
-            model["params"]["speculative_enabled"] = enable_mtp
-            model["params"]["speculative_method"] = spec_method
-            model["params"]["speculative_num_tokens"] = num_tokens
-
-    save_config(config)
+    """以 runtime override 方式套用 benchmark 所需配置並重啟 vLLM。"""
+    runtime_overrides = {
+        "enable_prefix_caching": prefix_caching,
+        "speculative_enabled": enable_mtp,
+        "speculative_method": spec_method,
+        "speculative_num_tokens": num_tokens,
+    }
     print(
-        "配置已更新："
+        "配置將以 runtime override 套用："
         f"speculative_enabled={enable_mtp}, "
         f"speculative_method={spec_method}, "
         f"speculative_num_tokens={num_tokens}, "
@@ -149,10 +115,10 @@ def update_benchmark_config(enable_mtp, num_tokens, spec_method, prefix_caching)
     )
 
     print("正在重啟 vLLM 服務...")
-    return restart_vllm()
+    return restart_vllm(runtime_overrides)
 
 
-def restart_vllm():
+def restart_vllm(params_override=None):
     """通過 pkill 重啟 vLLM"""
     try:
         # 停止 vLLM
@@ -181,7 +147,7 @@ def restart_vllm():
         model = next((m for m in config.get("models", []) if m.get("path") == model_path), None)
         defaults = config.get("defaults", {})
         model_params = model.get("params", {}) if model else {}
-        settings = {**defaults, **model_params}
+        settings = {**defaults, **model_params, **(params_override or {})}
         
         venv_python = Path(config.get("venv_path", "/home/jason/vllm/venv")) / "bin" / "python3"
         
@@ -629,27 +595,20 @@ def main():
         "matrix": []
     }
 
-    original_snapshot = snapshot_enabled_model_params()
-
-    try:
-        for variant in variants:
-            detailed, all_tps, all_acceptance_rates, all_mean_acceptance_lengths = run_benchmark_variant(
+    for variant in variants:
+        detailed, all_tps, all_acceptance_rates, all_mean_acceptance_lengths = run_benchmark_variant(
+            variant,
+            model_id,
+        )
+        all_results["matrix"].append(
+            summarize_variant(
                 variant,
-                model_id,
+                detailed,
+                all_tps,
+                all_acceptance_rates,
+                all_mean_acceptance_lengths,
             )
-            all_results["matrix"].append(
-                summarize_variant(
-                    variant,
-                    detailed,
-                    all_tps,
-                    all_acceptance_rates,
-                    all_mean_acceptance_lengths,
-                )
-            )
-    finally:
-        if restore_enabled_model_params(original_snapshot):
-            print("正在還原原始 vLLM 服務配置...")
-            restart_vllm()
+        )
 
     print_matrix_summary(all_results["matrix"])
     save_results(all_results, "benchmark_matrix")
