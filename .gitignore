@@ -7,3 +7,4 @@ plans/
 project.md
 data/*.db
 data/*.sqlite
+data/runtime_state.yaml
