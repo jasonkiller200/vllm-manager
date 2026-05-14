@@ -92,8 +92,7 @@ async function loadModelParams() {
     setChecked('param-enable-auto-tool-choice', p.enable_auto_tool_choice);
     setChecked('param-trust-remote-code', p.trust_remote_code);
     
-    // Speculative decoding (MTP)
-    const specEnabled = p.speculative_enabled || false;
+    const specEnabled = Boolean(p.speculative_enabled);
     setChecked('param-speculative-enabled', specEnabled);
     setVal('param-speculative-method', p.speculative_method || 'qwen3_next_mtp');
     setVal('param-speculative-num-tokens', p.speculative_num_tokens || 1);
@@ -383,6 +382,7 @@ async function startVLLM() {
 
 async function startModel(path) {
     showStartingState();
+    loadModelParams(); // ← 新增這一行來確保參數載入
     const resp = await fetchJSON(API.start, { method: 'POST', body: JSON.stringify({ model_path: path }) });
     if (resp) {
         if (resp.status === 'starting') {

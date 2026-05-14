@@ -13,12 +13,14 @@ import subprocess
 import time
 import threading
 import re
+import signal
 import yaml
 from pathlib import Path
 
 # 專案根目錄
 BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_PATH = BASE_DIR / "config.yaml"
+RUNTIME_STATE_PATH = BASE_DIR / "data" / "runtime_state.yaml"
 LOG_DIR = BASE_DIR / "logs"
 
 
@@ -27,9 +29,13 @@ class VLLMManager:
 
     _instance = None
     _vllm_pattern = "vllm.entrypoints.openai.api_server"
+    _engine_pattern = "VLLM::EngineCore"
+    _mtp_method_aliases = {"qwen3_next_mtp", "qwen3_5_mtp"}
 
     def __init__(self):
         self.config = self._load_config()
+        self.runtime_state = self._load_runtime_state()
+        self._migrate_legacy_runtime_state()
         self.log_dir = Path(self.config.get("log_dir", str(LOG_DIR)))
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.log_max_lines = self.config.get("log_max_lines", 2000)
@@ -55,7 +61,7 @@ class VLLMManager:
         if self.is_running:
             return  # Already running, skip
         # Try the last explicitly marked running model, or fall back to enabled model
-        last_model = self.config.get("last_running_model")
+        last_model = self.runtime_state.get("last_running_model")
         model_path = last_model or self._get_enabled_model()
         if not model_path:
             return
@@ -79,10 +85,32 @@ class VLLMManager:
         with open(CONFIG_PATH, "r") as f:
             return yaml.safe_load(f)
 
+    def _load_runtime_state(self):
+        """載入執行期狀態，避免寫回 config.yaml。"""
+        if not RUNTIME_STATE_PATH.exists():
+            return {}
+        with open(RUNTIME_STATE_PATH, "r") as f:
+            return yaml.safe_load(f) or {}
+
     def _save_config(self):
         """儲存設定到 YAML"""
         with open(CONFIG_PATH, "w") as f:
-            yaml.dump(self.config, f, default_flow_style=False, allow_unicode=True)
+            yaml.dump(self.config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    def _save_runtime_state(self):
+        """儲存執行期狀態。"""
+        RUNTIME_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(RUNTIME_STATE_PATH, "w") as f:
+            yaml.dump(self.runtime_state, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    def _migrate_legacy_runtime_state(self):
+        """將舊版寫在 config.yaml 的執行期狀態遷移出去。"""
+        legacy_last_model = self.config.pop("last_running_model", None)
+        if legacy_last_model and not self.runtime_state.get("last_running_model"):
+            self.runtime_state["last_running_model"] = legacy_last_model
+            self._save_runtime_state()
+        if legacy_last_model is not None:
+            self._save_config()
 
     def _detect_running(self):
         """啟動時檢測是否已有 vLLM 在跑"""
@@ -107,6 +135,87 @@ class VLLMManager:
             pids = [p for p in pids if p != current_pid]
             return pids
         return []
+
+    def _get_owned_pids_by_pattern(self, pattern):
+        """依 pattern 查詢目前使用者擁有的 PID。"""
+        result = subprocess.run(
+            ["pgrep", "-f", pattern],
+            capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            return []
+
+        current_pid = os.getpid()
+        current_uid = os.getuid()
+        pids = []
+        for raw in result.stdout.strip().split("\n"):
+            if not raw.isdigit():
+                continue
+            pid = int(raw)
+            if pid == current_pid:
+                continue
+            try:
+                if os.stat(f"/proc/{pid}").st_uid == current_uid:
+                    pids.append(pid)
+            except FileNotFoundError:
+                continue
+            except Exception:
+                continue
+        return pids
+
+    def _terminate_pids(self, pids, term_wait=6, kill_wait=2):
+        """先 TERM 再 KILL，回傳仍殘留的 PID。"""
+        target_pids = sorted(set(int(p) for p in pids if p))
+        if not target_pids:
+            return []
+
+        for pid in target_pids:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            except Exception:
+                pass
+
+        deadline = time.time() + term_wait
+        while time.time() < deadline:
+            alive = [pid for pid in target_pids if os.path.exists(f"/proc/{pid}")]
+            if not alive:
+                return []
+            time.sleep(0.2)
+
+        alive = [pid for pid in target_pids if os.path.exists(f"/proc/{pid}")]
+        for pid in alive:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except Exception:
+                pass
+
+        deadline = time.time() + kill_wait
+        while time.time() < deadline:
+            alive = [pid for pid in alive if os.path.exists(f"/proc/{pid}")]
+            if not alive:
+                return []
+            time.sleep(0.2)
+
+        return [pid for pid in alive if os.path.exists(f"/proc/{pid}")]
+
+    def _get_lingering_worker_pids(self):
+        """取得可能殘留佔用 GPU 的 vLLM worker / tracker PID。"""
+        engine_pids = self._get_owned_pids_by_pattern(self._engine_pattern)
+        tracker_pids = []
+        venv_path = self.config.get("venv_path")
+        if venv_path:
+            tracker_pattern = f"{venv_path}/bin/python3 -c from multiprocessing.resource_tracker"
+            tracker_pids = self._get_owned_pids_by_pattern(tracker_pattern)
+        return sorted(set(engine_pids + tracker_pids))
+
+    def _cleanup_lingering_workers(self):
+        """清理殘留的 vLLM worker，避免顯存卡住。"""
+        lingering = self._get_lingering_worker_pids()
+        return self._terminate_pids(lingering)
 
     @property
     def is_running(self):
@@ -135,6 +244,12 @@ class VLLMManager:
                 return entry.get("name", model_path)
         return model_path
 
+    def _normalize_speculative_method(self, method):
+        """Map deprecated model-specific MTP aliases to the generic vLLM method."""
+        if not method:
+            return "mtp"
+        return "mtp" if method in self._mtp_method_aliases else method
+
     def get_model_params(self):
         """取得目前啟用模型的合併參數 (defaults + model.params)"""
         model = self._get_enabled_model()
@@ -154,7 +269,7 @@ class VLLMManager:
             if entry.get("path") == model:
                 if "params" not in entry:
                     entry["params"] = {}
-                entry["params"].update(params)
+                entry["params"].update(params or {})
                 self._save_config()
                 return {"status": "saved", "model": model}
         return {"status": "error", "message": "找不到模型"}
@@ -172,6 +287,13 @@ class VLLMManager:
                 time.sleep(3)
             else:
                 return {"status": "already_running", "pid": self.pid}
+
+        lingering_before_start = self._cleanup_lingering_workers()
+        if lingering_before_start:
+            return {
+                "status": "error",
+                "message": f"無法清理殘留 vLLM worker: {lingering_before_start}",
+            }
 
         if model_path:
             model = model_path
@@ -212,7 +334,9 @@ class VLLMManager:
             cmd.append("--enable-prefix-caching")
 
         spec_enabled = settings.get("speculative_enabled", False)
-        spec_method = settings.get("speculative_method", "mtp")
+        spec_method = self._normalize_speculative_method(
+            settings.get("speculative_method", "mtp")
+        )
         spec_num_tokens = settings.get("speculative_num_tokens", 1)
 
         if spec_enabled:
@@ -233,8 +357,8 @@ class VLLMManager:
                     stderr=subprocess.STDOUT,
                     start_new_session=True
                 )
-            self.config["last_running_model"] = model
-            self._save_config()
+            self.runtime_state["last_running_model"] = model
+            self._save_runtime_state()
             
             return {
                 "status": "starting",
@@ -249,6 +373,13 @@ class VLLMManager:
     def stop(self):
         """停止 vLLM 服務"""
         if not self.is_running:
+            lingering_only = self._cleanup_lingering_workers()
+            if lingering_only:
+                return {
+                    "status": "partial_stopped",
+                    "pids": [],
+                    "remaining_pids": lingering_only,
+                }
             return {"status": "not_running"}
 
         pids = []
@@ -278,16 +409,18 @@ class VLLMManager:
                     time.sleep(0.2)
 
             remaining = self._get_vllm_pids()
+
+            lingering_remaining = self._cleanup_lingering_workers()
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
         self._process = None
-        # Clear last running model on stop
-        if "last_running_model" in self.config:
-            del self.config["last_running_model"]
-            self._save_config()
-        if remaining:
-            return {"status": "partial_stopped", "pids": pids, "remaining_pids": remaining}
+        if "last_running_model" in self.runtime_state:
+            del self.runtime_state["last_running_model"]
+            self._save_runtime_state()
+        all_remaining = sorted(set(remaining + lingering_remaining))
+        if all_remaining:
+            return {"status": "partial_stopped", "pids": pids, "remaining_pids": all_remaining}
         return {"status": "stopped", "pids": pids}
 
     def restart(self, model_path=None, params=None):
@@ -299,10 +432,12 @@ class VLLMManager:
     def get_status(self):
         """取得完整狀態"""
         running = self.is_running
+        lingering_workers = self._get_lingering_worker_pids()
         result = {
             "running": running,
             "pid": self.pid if running else None,
             "uptime": None,
+            "lingering_workers": lingering_workers,
         }
         if running and self.pid:
             try:
