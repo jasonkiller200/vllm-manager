@@ -18,6 +18,10 @@ const API = {
 };
 let refreshTimer = null;
 let paramsHasChanges = false;
+let speculativeCapability = {
+    isQwenModel: false,
+    modelName: '',
+};
 
 // ---- 未儲存提示 ----
 
@@ -72,12 +76,18 @@ async function loadModelParams() {
     if (!resp || resp.status !== 'ok') {
         const label = document.getElementById('model-params-label');
         if (label) label.textContent = resp && resp.message ? ` (${resp.message})` : ' (無啟用模型)';
+        updateSpeculativeUI(false);
         clearParamsChanged();
         return;
     }
     const p = resp.params;
+    const modelName = resp.name || resp.model || '';
+    speculativeCapability = {
+        isQwenModel: isQwenModel(modelName),
+        modelName,
+    };
     const label = document.getElementById('model-params-label');
-    if (label) label.textContent = ` — ${resp.name || resp.model}`;
+    if (label) label.textContent = ` — ${modelName}`;
     
     setVal('param-port', p.port);
     setVal('param-host', p.host);
@@ -93,12 +103,52 @@ async function loadModelParams() {
     setChecked('param-trust-remote-code', p.trust_remote_code);
     
     const specEnabled = Boolean(p.speculative_enabled);
-    setChecked('param-speculative-enabled', specEnabled);
+    setChecked('param-speculative-enabled', speculativeCapability.isQwenModel && specEnabled);
     setVal('param-speculative-method', p.speculative_method || 'qwen3_next_mtp');
     setVal('param-speculative-num-tokens', p.speculative_num_tokens || 1);
-    toggleSpeculativeOptions(specEnabled);
+    updateSpeculativeUI(specEnabled);
     
     clearParamsChanged();
+}
+
+function isQwenModel(modelName) {
+    return /qwen/i.test(modelName || '');
+}
+
+function updateSpeculativeUI(specEnabled) {
+    const checkbox = document.getElementById('param-speculative-enabled');
+    const methodSelect = document.getElementById('param-speculative-method');
+    const numTokensInput = document.getElementById('param-speculative-num-tokens');
+    const statusLabel = document.getElementById('speculative-status-label');
+    const helpText = document.getElementById('speculative-help-text');
+    const enabledForModel = speculativeCapability.isQwenModel;
+
+    if (checkbox) {
+        checkbox.disabled = !enabledForModel;
+        checkbox.checked = enabledForModel && Boolean(specEnabled);
+    }
+
+    if (methodSelect) {
+        methodSelect.disabled = !enabledForModel;
+        methodSelect.value = 'qwen3_next_mtp';
+    }
+
+    if (numTokensInput) {
+        numTokensInput.disabled = !enabledForModel;
+    }
+
+    if (statusLabel) {
+        statusLabel.textContent = enabledForModel ? 'Qwen 專用 qwen3_next_mtp' : '⚠️ 僅 Qwen 模型可用';
+        statusLabel.style.color = enabledForModel ? '#3fb950' : '#d29922';
+    }
+
+    if (helpText) {
+        helpText.textContent = enabledForModel
+            ? '目前僅開放 Qwen 模型使用 qwen3_next_mtp。重啟後生效。'
+            : '目前僅開放 Qwen 模型使用 qwen3_next_mtp，其他模型暫不開放。';
+    }
+
+    toggleSpeculativeOptions(enabledForModel && Boolean(specEnabled));
 }
 
 function toggleSpeculativeOptions(enabled) {
@@ -579,6 +629,9 @@ async function cloneModel() {
 
 async function saveParams(e) {
     e.preventDefault();
+    const speculativeEnabled = speculativeCapability.isQwenModel
+        ? document.getElementById('param-speculative-enabled').checked
+        : false;
     const params = {
         port: parseInt(document.getElementById('param-port').value) || 8001,
         host: document.getElementById('param-host').value || '0.0.0.0',
@@ -592,8 +645,8 @@ async function saveParams(e) {
         enable_prefix_caching: document.getElementById('param-enable-prefix-caching').checked,
         enable_auto_tool_choice: document.getElementById('param-enable-auto-tool-choice').checked,
         trust_remote_code: document.getElementById('param-trust-remote-code').checked,
-        speculative_enabled: document.getElementById('param-speculative-enabled').checked,
-        speculative_method: document.getElementById('param-speculative-method').value || 'qwen3_next_mtp',
+        speculative_enabled: speculativeEnabled,
+        speculative_method: 'qwen3_next_mtp',
         speculative_num_tokens: parseInt(document.getElementById('param-speculative-num-tokens').value) || 1,
     };
     const resp = await fetchJSON(API.modelParams, {
@@ -604,7 +657,9 @@ async function saveParams(e) {
         alert(`參數已儲存 (${resp.model})`);
         clearParamsChanged();
         loadModelParams();
+        return;
     }
+    alert(resp && resp.message ? resp.message : '參數儲存失敗');
 }
 
 // ---- 工具函式 ----

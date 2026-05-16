@@ -133,19 +133,22 @@
                     </div>
 
                     <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
-                        <h3 style="font-size: 0.9em; margin-bottom: 10px; color: #f0883e;">⚡ Speculative Decoding (MTP)</h3>
+                        <h3 style="font-size: 0.9em; margin-bottom: 10px; color: #8b949e;">⚡ Speculative Decoding (MTP)</h3>
                         <div style="margin-bottom: 8px;">
-                            <label><input type="checkbox" id="param-speculative-enabled"> 啟用 MTP Speculative Decoding</label>
+                            <label>
+                                    <input type="checkbox" id="param-speculative-enabled" disabled>
+                                    <span id="speculative-status-label" style="color: #d29922;">⚠️ 僅 Qwen 模型可用</span>
+                            </label>
+                                <div id="speculative-help-text" style="font-size: 0.75em; color: #8b949e; margin-top: 4px;">
+                                    目前僅開放 Qwen 模型使用 qwen3_next_mtp，其他模型暫不開放。
+                            </div>
                             <div id="speculative-options" style="display: none; margin-top: 8px; padding-left: 20px;">
                                 <div class="form-grid">
                                     <div class="form-group">
                                         <label>Method</label>
-                                        <select id="param-speculative-method">
-                                            <option value="qwen3_next_mtp">qwen3_next_mtp (Qwen3.5/3.6)</option>
-                                            <option value="mtp">mtp (通用)</option>
-                                            <option value="eagle">eagle</option>
-                                            <option value="nextn">nextn</option>
-                                        </select>
+<select id="param-speculative-method">
+<option value="qwen3_next_mtp">qwen3_next_mtp (Qwen3.5/3.6)</option>
+</select>
                                     </div>
                                     <div class="form-group">
                                         <label>Num Speculative Tokens</label>

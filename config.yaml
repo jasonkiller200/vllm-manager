@@ -10,12 +10,11 @@ defaults:
   max_num_seqs: 4
   port: 8001
   speculative_enabled: false
-  speculative_method: qwen3_next_mtp
+  speculative_method: mtp
   speculative_num_tokens: 1
   tool_call_parser: qwen3_xml
   trust_remote_code: true
   uvicorn_log_level: info
-last_running_model: /home/jason/models/Qwen3.5-27B-quantized
 log_dir: /home/jason/app/vllm/logs
 log_max_lines: 2000
 models:
@@ -24,22 +23,54 @@ models:
   path: /home/jason/models/Nemotron-3-Nano
 - enabled: false
   name: Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit
+  params:
+    dtype: float16
+    enable_auto_tool_choice: true
+    enable_prefix_caching: false
+    gpu_memory_utilization: 0.95
+    host: 0.0.0.0
+    kv_cache_dtype: fp8
+    max_model_len: 196000
+    max_num_batched_tokens: 4096
+    max_num_seqs: 4
+    port: 8001
+    speculative_enabled: false
+    speculative_method: qwen3_next_mtp
+    speculative_num_tokens: 1
+    tool_call_parser: qwen3_xml
+    trust_remote_code: true
   path: /home/jason/models/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit
 - enabled: false
   name: Qwen3-Coder-30B-A3B-Instruct-FP4
+  params:
+    dtype: float16
+    enable_auto_tool_choice: true
+    enable_prefix_caching: false
+    gpu_memory_utilization: 0.95
+    host: 0.0.0.0
+    kv_cache_dtype: fp8
+    max_model_len: 128000
+    max_num_batched_tokens: 4096
+    max_num_seqs: 4
+    port: 8001
+    speculative_enabled: true
+    speculative_method: qwen3_next_mtp
+    speculative_num_tokens: 1
+    tool_call_parser: qwen3_xml
+    trust_remote_code: true
   path: /home/jason/models/Qwen3-Coder-30B-A3B-Instruct-FP4
-- enabled: true
+- enabled: false
   name: Qwen3.5-27B-quantized
   params:
     dtype: float16
     enable_auto_tool_choice: true
     enable_prefix_caching: false
-    gpu_memory_utilization: 0.93
+    gpu_memory_utilization: 0.95
     host: 0.0.0.0
     kv_cache_dtype: fp8
     max_model_len: 196000
-    max_num_batched_tokens: 6144
-    max_num_seqs: 2
+    max_num_batched_tokens: 5120
+    max_num_seqs: 3
     port: 8001
     speculative_enabled: true
     speculative_method: qwen3_next_mtp
@@ -47,7 +78,7 @@ models:
     tool_call_parser: qwen3_xml
     trust_remote_code: true
   path: /home/jason/models/Qwen3.5-27B-quantized
-- enabled: false
+- enabled: true
   name: Qwen3.6-27B-AWQ-INT4
   params:
     dtype: float16
@@ -56,13 +87,13 @@ models:
     gpu_memory_utilization: 0.93
     host: 0.0.0.0
     kv_cache_dtype: fp8
-    max_model_len: 198656
-    max_num_batched_tokens: 5632
+    max_model_len: 160000
+    max_num_batched_tokens: 6656
     max_num_seqs: 4
     port: 8001
     speculative_enabled: true
     speculative_method: qwen3_next_mtp
-    speculative_num_tokens: 1
+    speculative_num_tokens: 2
     tool_call_parser: qwen3_xml
     trust_remote_code: true
   path: /home/jason/models/Qwen3.6-27B-AWQ-INT4
@@ -80,7 +111,7 @@ models:
     max_num_seqs: 4
     port: 8001
     speculative_enabled: false
-    speculative_method: qwen3_next_mtp
+    speculative_method: mtp
     speculative_num_tokens: 1
     tool_call_parser: qwen3_xml
     trust_remote_code: true

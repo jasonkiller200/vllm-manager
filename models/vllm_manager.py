@@ -250,6 +250,25 @@ class VLLMManager:
             return "mtp"
         return "mtp" if method in self._mtp_method_aliases else method
 
+    def _supports_qwen_mtp(self, model_path):
+        """Only Qwen-family models may use the qwen3_next_mtp alias for now."""
+        model_name = self._get_model_name(model_path)
+        haystack = f"{model_name} {model_path}".lower()
+        return "qwen" in haystack
+
+    def _validate_speculative_params(self, model_path, params):
+        """Restrict speculative decoding to the currently supported Qwen path."""
+        merged = {**self.config.get("defaults", {}), **self._get_model_params(model_path), **(params or {})}
+        if not merged.get("speculative_enabled", False):
+            return None
+
+        method = merged.get("speculative_method") or "qwen3_next_mtp"
+        if not self._supports_qwen_mtp(model_path):
+            return "目前僅開放 Qwen 模型使用 speculative decoding"
+        if method != "qwen3_next_mtp":
+            return "目前 speculative_method 僅支援 qwen3_next_mtp"
+        return None
+
     def get_model_params(self):
         """取得目前啟用模型的合併參數 (defaults + model.params)"""
         model = self._get_enabled_model()
@@ -265,6 +284,9 @@ class VLLMManager:
         model = self._get_enabled_model()
         if not model:
             return {"status": "error", "message": "沒有啟用的模型"}
+        validation_error = self._validate_speculative_params(model, params)
+        if validation_error:
+            return {"status": "error", "message": validation_error}
         for entry in self.config.get("models", []):
             if entry.get("path") == model:
                 if "params" not in entry:
@@ -305,6 +327,9 @@ class VLLMManager:
         defaults = self.config.get("defaults", {})
         model_params = self._get_model_params(model)
         settings = {**defaults, **model_params, **(params or {})}
+        validation_error = self._validate_speculative_params(model, settings)
+        if validation_error:
+            return {"status": "error", "message": validation_error}
 
         venv_python = Path(self.config["venv_path"]) / "bin" / "python3"
 
